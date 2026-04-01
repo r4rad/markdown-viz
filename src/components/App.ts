@@ -11,6 +11,8 @@ import { applyTheme, getSavedTheme } from '../themes/themes';
 import { setupImport, openFilePicker, importFromGitHubURL } from '../lib/import';
 import { exportMarkdown, exportHTML, exportPDF } from '../lib/export';
 import { beautifyMarkdown } from '../lib/beautifier';
+import { initFirebase } from '../lib/auth';
+import { initAuthUI } from './AuthUI';
 
 export async function initApp(): Promise<void> {
   const app = document.getElementById('app')!;
@@ -43,6 +45,8 @@ export async function initApp(): Promise<void> {
   initDiagramModal();
   setupImport();
   setupKeyboardShortcuts();
+  initFirebase();
+  initAuthUI();
 
   // Wire up events
   on('import-file', () => openFilePicker());
