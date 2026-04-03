@@ -3,10 +3,11 @@ import { EditorState, type Extension } from '@codemirror/state';
 import { defaultKeymap, history, historyKeymap, indentWithTab } from '@codemirror/commands';
 import { markdown, markdownLanguage } from '@codemirror/lang-markdown';
 import { languages } from '@codemirror/language-data';
-import { bracketMatching, indentOnInput, syntaxHighlighting, defaultHighlightStyle, foldGutter, foldKeymap } from '@codemirror/language';
+import { bracketMatching, indentOnInput, syntaxHighlighting, defaultHighlightStyle, foldGutter, foldKeymap, HighlightStyle } from '@codemirror/language';
 import { closeBrackets, closeBracketsKeymap, autocompletion, completionKeymap } from '@codemirror/autocomplete';
 import { searchKeymap, highlightSelectionMatches } from '@codemirror/search';
 import { lintKeymap } from '@codemirror/lint';
+import { tags } from '@lezer/highlight';
 import { getActiveTab, updateTabContent, updateTabCursor, getState } from '../lib/state';
 import { on, emit } from '../lib/events';
 import type { FileTab } from '../types';
@@ -78,6 +79,49 @@ function createEditorTheme(): Extension {
   });
 }
 
+function createSyntaxHighlightStyle(): Extension {
+  const style = HighlightStyle.define([
+    { tag: tags.keyword, color: 'var(--syntax-keyword)' },
+    { tag: tags.string, color: 'var(--syntax-string)' },
+    { tag: tags.comment, color: 'var(--syntax-comment)', fontStyle: 'italic' },
+    { tag: tags.function(tags.variableName), color: 'var(--syntax-function)' },
+    { tag: tags.definition(tags.variableName), color: 'var(--syntax-function)' },
+    { tag: tags.variableName, color: 'var(--syntax-variable)' },
+    { tag: tags.number, color: 'var(--syntax-number)' },
+    { tag: tags.integer, color: 'var(--syntax-number)' },
+    { tag: tags.float, color: 'var(--syntax-number)' },
+    { tag: tags.bool, color: 'var(--syntax-keyword)' },
+    { tag: tags.operator, color: 'var(--syntax-keyword)' },
+    { tag: tags.typeName, color: 'var(--syntax-function)' },
+    { tag: tags.className, color: 'var(--syntax-function)' },
+    { tag: tags.propertyName, color: 'var(--syntax-variable)' },
+    { tag: tags.url, color: 'var(--syntax-url)', textDecoration: 'underline' },
+    { tag: tags.link, color: 'var(--syntax-url)' },
+    { tag: tags.heading, color: 'var(--syntax-heading)', fontWeight: 'bold' },
+    { tag: tags.heading1, color: 'var(--syntax-heading)', fontWeight: 'bold', fontSize: '1.3em' },
+    { tag: tags.heading2, color: 'var(--syntax-heading)', fontWeight: 'bold', fontSize: '1.2em' },
+    { tag: tags.heading3, color: 'var(--syntax-heading)', fontWeight: 'bold', fontSize: '1.1em' },
+    { tag: tags.strong, color: 'var(--syntax-bold)', fontWeight: 'bold' },
+    { tag: tags.emphasis, color: 'var(--syntax-italic)', fontStyle: 'italic' },
+    { tag: tags.strikethrough, textDecoration: 'line-through', color: 'var(--syntax-comment)' },
+    { tag: tags.monospace, color: 'var(--syntax-string)', fontFamily: "'SFMono-Regular', Consolas, monospace" },
+    { tag: tags.quote, color: 'var(--syntax-comment)', fontStyle: 'italic' },
+    { tag: tags.meta, color: 'var(--syntax-comment)' },
+    { tag: tags.tagName, color: 'var(--syntax-keyword)' },
+    { tag: tags.attributeName, color: 'var(--syntax-function)' },
+    { tag: tags.attributeValue, color: 'var(--syntax-string)' },
+    { tag: tags.processingInstruction, color: 'var(--syntax-keyword)' },
+    { tag: tags.atom, color: 'var(--syntax-number)' },
+    { tag: tags.regexp, color: 'var(--syntax-string)' },
+    { tag: tags.escape, color: 'var(--syntax-number)' },
+    { tag: tags.null, color: 'var(--syntax-keyword)' },
+    { tag: tags.self, color: 'var(--syntax-keyword)' },
+    { tag: tags.separator, color: 'var(--syntax-comment)' },
+    { tag: tags.special(tags.string), color: 'var(--syntax-string)' },
+  ]);
+  return syntaxHighlighting(style);
+}
+
 function getExtensions(): Extension[] {
   return [
     lineNumbers(),
@@ -90,6 +134,7 @@ function getExtensions(): Extension[] {
     EditorState.allowMultipleSelections.of(true),
     indentOnInput(),
     syntaxHighlighting(defaultHighlightStyle, { fallback: true }),
+    createSyntaxHighlightStyle(),
     bracketMatching(),
     closeBrackets(),
     autocompletion(),
