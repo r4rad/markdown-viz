@@ -208,3 +208,24 @@ export async function deleteCloudFile(fileId: string): Promise<void> {
     console.error('Cloud delete failed:', e);
   }
 }
+
+export async function getCloudFiles(): Promise<{ id: string; name: string; updatedAt: number }[]> {
+  if (!db || !currentUser) return [];
+  try {
+    const filesRef = collection(db, 'users', currentUser.uid, 'files');
+    const snap = await getDocs(filesRef);
+    const files: { id: string; name: string; updatedAt: number }[] = [];
+    snap.forEach((d) => {
+      const data = d.data();
+      files.push({
+        id: d.id,
+        name: data.name || 'Untitled.md',
+        updatedAt: data.updatedAt || 0,
+      });
+    });
+    return files;
+  } catch (e) {
+    console.error('Cloud files list failed:', e);
+    return [];
+  }
+}

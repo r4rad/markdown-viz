@@ -9,6 +9,8 @@ import {
   isFirebaseReady,
   syncToCloud,
   loadFromCloud,
+  deleteCloudFile,
+  getCloudFiles,
 } from '../lib/auth';
 import { restoreState } from '../lib/state';
 import type { UserProfile } from '../types';
@@ -65,6 +67,114 @@ function renderPanelContent(): void {
   const currentTheme = state.theme;
 
   content.innerHTML = '';
+
+  // ─── Account / Profile Section (top priority) ───
+  if (isFirebaseReady()) {
+    const authSection = createSection('Account');
+    if (authProfile) {
+      // Profile card
+      const card = document.createElement('div');
+      card.className = 'profile-card';
+      const initial = (authProfile.displayName || authProfile.email || 'U').charAt(0).toUpperCase();
+      card.innerHTML = `
+        ${authProfile.photoURL
+          ? `<img class="profile-avatar" src="${escapeHtml(authProfile.photoURL)}" alt="" />`
+          : `<div class="profile-avatar-placeholder">${initial}</div>`}
+        <div class="profile-details">
+          <div class="profile-name">${escapeHtml(authProfile.displayName || 'User')}</div>
+          <div class="profile-email">${escapeHtml(authProfile.email || '')}</div>
+          <div class="profile-provider">${icon(authProfile.provider === 'github' ? 'github' : 'google')} ${authProfile.provider === 'github' ? 'GitHub' : 'Google'}</div>
+        </div>
+      `;
+      authSection.appendChild(card);
+
+      // Sync / Sign Out actions
+      const authGrid = document.createElement('div');
+      authGrid.className = 'settings-btn-grid';
+      const syncBtn = document.createElement('button');
+      syncBtn.className = 'settings-action-btn wide';
+      syncBtn.textContent = '☁️ Sync to Cloud';
+      syncBtn.addEventListener('click', async () => {
+        syncBtn.textContent = '☁️ Syncing...';
+        syncBtn.disabled = true;
+        await syncToCloud(getState());
+        syncBtn.textContent = '✅ Synced!';
+        setTimeout(() => renderPanelContent(), 1000);
+      });
+      authGrid.appendChild(syncBtn);
+
+      const loadBtn = document.createElement('button');
+      loadBtn.className = 'settings-action-btn wide';
+      loadBtn.textContent = '📥 Load from Cloud';
+      loadBtn.addEventListener('click', async () => {
+        loadBtn.textContent = '📥 Loading...';
+        loadBtn.disabled = true;
+        const c = await loadFromCloud();
+        if (c?.tabs?.length) restoreState(c);
+        closeSettingsMenu();
+      });
+      authGrid.appendChild(loadBtn);
+
+      const signOutBtn = document.createElement('button');
+      signOutBtn.className = 'settings-action-btn wide';
+      signOutBtn.textContent = '🚪 Sign Out';
+      signOutBtn.addEventListener('click', async () => {
+        await signOut();
+        renderPanelContent();
+      });
+      authGrid.appendChild(signOutBtn);
+      authSection.appendChild(authGrid);
+
+      content.appendChild(authSection);
+
+      // ─── Your Space Section ───
+      const spaceSection = createSection('Your Space');
+
+      const banner = document.createElement('div');
+      banner.className = 'space-banner';
+      banner.innerHTML = `<span class="badge">BETA</span> Your current plan supports up to <strong>5 documents</strong> in the cloud.`;
+      spaceSection.appendChild(banner);
+
+      // Load and show cloud files
+      const docListContainer = document.createElement('div');
+      docListContainer.id = 'space-doc-list-container';
+      docListContainer.innerHTML = '<div class="space-empty">Loading cloud documents...</div>';
+      spaceSection.appendChild(docListContainer);
+
+      content.appendChild(spaceSection);
+
+      // Fetch cloud files asynchronously
+      loadCloudFilesList(docListContainer);
+    } else {
+      // Signed out - show sign-in prompt
+      const desc = document.createElement('div');
+      desc.className = 'signin-description';
+      desc.textContent = 'Sign in to sync your documents across devices. Your work is always saved locally — signing in is optional.';
+      authSection.appendChild(desc);
+
+      const ghBtn = document.createElement('button');
+      ghBtn.className = 'signin-btn';
+      ghBtn.innerHTML = `${icon('github')} Continue with GitHub`;
+      ghBtn.addEventListener('click', async () => {
+        ghBtn.textContent = 'Signing in...';
+        ghBtn.disabled = true;
+        try { await signInWithGitHub(); } catch (err) { console.error('Sign-in error:', err); renderPanelContent(); }
+      });
+      authSection.appendChild(ghBtn);
+
+      const ggBtn = document.createElement('button');
+      ggBtn.className = 'signin-btn';
+      ggBtn.innerHTML = `${icon('google')} Continue with Google`;
+      ggBtn.addEventListener('click', async () => {
+        ggBtn.textContent = 'Signing in...';
+        ggBtn.disabled = true;
+        try { await signInWithGoogle(); } catch (err) { console.error('Sign-in error:', err); renderPanelContent(); }
+      });
+      authSection.appendChild(ggBtn);
+
+      content.appendChild(authSection);
+    }
+  }
 
   // ─── Formatting Section ───
   const fmtSection = createSection('Formatting');
@@ -178,55 +288,70 @@ function renderPanelContent(): void {
   }
   themeSection.appendChild(darkGrid);
   content.appendChild(themeSection);
+}
 
-  // ─── Account Section ───
-  if (isFirebaseReady()) {
-    const authSection = createSection('Account');
-    if (authProfile) {
-      const info = document.createElement('div');
-      info.className = 'settings-auth-info';
-      info.innerHTML = `
-        ${authProfile.photoURL ? `<img class="settings-avatar" src="${authProfile.photoURL}" alt="" />` : ''}
-        <div>
-          <div class="settings-auth-name">${escapeHtml(authProfile.displayName || 'User')}</div>
-          <div class="settings-auth-email">${escapeHtml(authProfile.email || '')}</div>
-        </div>
-      `;
-      authSection.appendChild(info);
-
-      const authGrid = document.createElement('div');
-      authGrid.className = 'settings-btn-grid';
-      const authActions = [
-        { label: '☁️ Sync to Cloud', fn: async () => { await syncToCloud(getState()); closeSettingsMenu(); } },
-        { label: '📥 Load from Cloud', fn: async () => { const c = await loadFromCloud(); if (c?.tabs?.length) restoreState(c); closeSettingsMenu(); } },
-        { label: '🚪 Sign Out', fn: async () => { await signOut(); renderPanelContent(); } },
-      ];
-      for (const a of authActions) {
-        const btn = document.createElement('button');
-        btn.className = 'settings-action-btn wide';
-        btn.textContent = a.label;
-        btn.addEventListener('click', a.fn);
-        authGrid.appendChild(btn);
-      }
-      authSection.appendChild(authGrid);
-    } else {
-      const authGrid = document.createElement('div');
-      authGrid.className = 'settings-btn-grid';
-      const signInBtn = (label: string, icn: string, fn: () => Promise<void>) => {
-        const btn = document.createElement('button');
-        btn.className = 'settings-action-btn wide';
-        btn.innerHTML = `${icon(icn)} ${label}`;
-        btn.addEventListener('click', async () => {
-          try { await fn(); } catch (err) { console.error('Sign-in error:', err); }
-        });
-        return btn;
-      };
-      authGrid.appendChild(signInBtn('Sign in with GitHub', 'github', signInWithGitHub));
-      authGrid.appendChild(signInBtn('Sign in with Google', 'google', signInWithGoogle));
-      authSection.appendChild(authGrid);
+async function loadCloudFilesList(container: HTMLElement): Promise<void> {
+  try {
+    const files = await getCloudFiles();
+    if (!files || files.length === 0) {
+      container.innerHTML = '<div class="space-empty">No documents synced yet. Click "Sync to Cloud" to save your work.</div>';
+      return;
     }
-    content.appendChild(authSection);
+
+    const sortedFiles = files.sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
+    const list = document.createElement('ul');
+    list.className = 'space-doc-list';
+
+    for (const file of sortedFiles) {
+      const li = document.createElement('li');
+      li.className = 'space-doc-item';
+
+      const nameSpan = document.createElement('span');
+      nameSpan.className = 'space-doc-name';
+      nameSpan.textContent = file.name || 'Untitled.md';
+      nameSpan.title = file.name || 'Untitled.md';
+
+      const dateSpan = document.createElement('span');
+      dateSpan.className = 'space-doc-date';
+      dateSpan.textContent = file.updatedAt ? formatRelativeDate(file.updatedAt) : '';
+
+      const removeBtn = document.createElement('button');
+      removeBtn.className = 'space-doc-remove';
+      removeBtn.textContent = '×';
+      removeBtn.title = 'Remove from cloud';
+      removeBtn.addEventListener('click', async (e) => {
+        e.stopPropagation();
+        removeBtn.textContent = '…';
+        await deleteCloudFile(file.id);
+        li.remove();
+        // Update count
+        const remaining = list.querySelectorAll('.space-doc-item').length;
+        if (remaining === 0) {
+          container.innerHTML = '<div class="space-empty">No documents synced. Click "Sync to Cloud" to save your work.</div>';
+        }
+      });
+
+      li.append(nameSpan, dateSpan, removeBtn);
+      list.appendChild(li);
+    }
+
+    container.innerHTML = '';
+    container.appendChild(list);
+  } catch {
+    container.innerHTML = '<div class="space-empty">Could not load cloud documents.</div>';
   }
+}
+
+function formatRelativeDate(timestamp: number): string {
+  const diff = Date.now() - timestamp;
+  const mins = Math.floor(diff / 60000);
+  if (mins < 1) return 'just now';
+  if (mins < 60) return `${mins}m ago`;
+  const hours = Math.floor(mins / 60);
+  if (hours < 24) return `${hours}h ago`;
+  const days = Math.floor(hours / 24);
+  if (days < 30) return `${days}d ago`;
+  return new Date(timestamp).toLocaleDateString();
 }
 
 function createSection(title: string): HTMLElement {
