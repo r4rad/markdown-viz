@@ -59,7 +59,7 @@ function render(container: HTMLElement): void {
       input.focus();
       input.select();
       const finish = () => {
-        const val = input.value.trim() || 'Untitled.md';
+        const val = input.value.trim() || tab.name;
         updateTabName(tab.id, val);
         input.replaceWith(nameSpan);
         nameSpan.textContent = val;
