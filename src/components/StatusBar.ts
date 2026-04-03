@@ -1,4 +1,5 @@
 import { on } from '../lib/events';
+import { getActiveTab, getState } from '../lib/state';
 
 export function createStatusBar(): HTMLElement {
   const el = document.createElement('div');
@@ -13,6 +14,12 @@ export function createStatusBar(): HTMLElement {
     <span class="status-spacer"></span>
     <span class="status-item" id="status-sync">Sync: On</span>
     <span class="status-item">Markdown</span>
+    <span class="status-separator"></span>
+    <span class="status-item status-brand">
+      <a href="https://rafatahmad.com" target="_blank" rel="noopener" title="Visit rafatahmad.com" class="brand-link">
+        <span class="brand-emoji">⬡</span><span class="brand-name">r4rad</span>
+      </a>
+    </span>
   `;
 
   on('content-changed', (data: unknown) => {
@@ -21,9 +28,8 @@ export function createStatusBar(): HTMLElement {
   });
 
   on('active-tab-changed', (tab: unknown) => {
-    if (tab && (tab as { content: string }).content !== undefined) {
-      updateStats(el, (tab as { content: string }).content);
-    }
+    const t = tab as { content: string } | null;
+    if (t?.content !== undefined) updateStats(el, t.content);
   });
 
   on('cursor-changed', (data: unknown) => {
@@ -36,8 +42,15 @@ export function createStatusBar(): HTMLElement {
   });
 
   on('state-restored', () => {
-    // Will be updated by next content-changed
+    const tab = getActiveTab();
+    if (tab) updateStats(el, tab.content);
+    el.querySelector('#status-sync')!.textContent = `Sync: ${getState().syncScroll ? 'On' : 'Off'}`;
   });
+
+  // Initialize immediately from current active tab (state may already be restored)
+  const tab = getActiveTab();
+  if (tab) updateStats(el, tab.content);
+  el.querySelector('#status-sync')!.textContent = `Sync: ${getState().syncScroll ? 'On' : 'Off'}`;
 
   return el;
 }
