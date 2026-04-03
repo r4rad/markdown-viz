@@ -1230,8 +1230,83 @@
 
 /* ─── Settings mobile auth section ─── */
 @media (min-width: 769px) {
-  .settings-mobile-auth {
-    display: none !important;
-  }
+  /* auth section is shown everywhere — no hide rule */
 }
+
+/* ─── Auth avatar button in top bar ─── */
+.auth-avatar-btn {
+  padding: 2px !important;
+  border-radius: 50% !important;
+}
+
+.auth-avatar-btn .user-avatar {
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  display: block;
+}
+
+.user-avatar-initial--sm {
+  width: 26px !important;
+  height: 26px !important;
+  font-size: 12px !important;
+  font-weight: 700;
+}
+
+/* ─── Beta announcement banner ─── */
+.beta-banner {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px;
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+  border-bottom: 1px solid color-mix(in srgb, var(--accent) 25%, transparent);
+  font-size: 12px;
+  color: var(--text-secondary, var(--text-primary));
+  flex-shrink: 0;
+  min-height: 32px;
+}
+
+.beta-banner strong {
+  color: var(--accent);
+}
+
+.beta-banner-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: auto;
+}
+
+.beta-banner-link {
+  font-size: 11px;
+  color: var(--accent);
+  background: none;
+  border: 1px solid var(--accent);
+  border-radius: 4px;
+  padding: 1px 8px;
+  cursor: pointer;
+  font-weight: 500;
+  transition: background 0.15s;
+}
+
+.beta-banner-link:hover {
+  background: color-mix(in srgb, var(--accent) 15%, transparent);
+}
+
+.beta-banner-dismiss {
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  font-size: 16px;
+  cursor: pointer;
+  padding: 0 2px;
+  line-height: 1;
+  transition: color 0.15s;
+}
+
+.beta-banner-dismiss:hover {
+  color: var(--text-primary);
+}
+
 
