@@ -48,7 +48,15 @@ $$
 $$
 `;
 
-function createTab(name = 'Untitled.md', content = DEFAULT_CONTENT): FileTab {
+function generateUntitledName(): string {
+  const names = new Set(state.tabs.map(t => t.name.toLowerCase()));
+  if (!names.has('untitled-1.md')) return 'untitled-1.md';
+  let n = 2;
+  while (names.has(`untitled-${n}.md`)) n++;
+  return `untitled-${n}.md`;
+}
+
+function createTab(name = 'untitled-1.md', content = DEFAULT_CONTENT): FileTab {
   return {
     id: crypto.randomUUID(),
     name,
@@ -89,7 +97,8 @@ export function setTheme(themeId: string): void {
 }
 
 export function addTab(name?: string, content?: string): FileTab {
-  const tab = createTab(name, content ?? '');
+  const resolvedName = name ?? generateUntitledName();
+  const tab = createTab(resolvedName, content ?? '');
   state.tabs.push(tab);
   state.activeTabId = tab.id;
   emit('tab-added', tab);
