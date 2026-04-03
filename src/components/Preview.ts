@@ -6,6 +6,7 @@ import { on, emit } from '../lib/events';
 let previewEl: HTMLElement;
 let contentEl: HTMLElement;
 let renderTimer: ReturnType<typeof setTimeout> | null = null;
+const headingSlugCounts = new Map<string, number>();
 let highlightModule: typeof import('highlight.js') | null = null;
 let katexModule: typeof import('katex') | null = null;
 let mermaidModule: typeof import('mermaid') | null = null;
@@ -41,6 +42,16 @@ function configureMarked(): void {
     gfm: true,
     breaks: true,
     renderer: {
+      // Add IDs to headings for TOC scroll navigation
+      heading({ tokens, depth }: { tokens: any[]; depth: number }): string {
+        const text = this.parser.parseInline(tokens);
+        const rawSlug = slugify(text);
+        const count = headingSlugCounts.get(rawSlug) || 0;
+        headingSlugCounts.set(rawSlug, count + 1);
+        const slug = count > 0 ? `${rawSlug}-${count}` : rawSlug;
+        return `<h${depth} id="${slug}">${text}</h${depth}>\n`;
+      },
+
       // Custom code block renderer for diagrams
       code({ text, lang }: { text: string; lang?: string; escaped?: boolean }): string {
         const language = (lang || '').toLowerCase().trim();
@@ -81,6 +92,17 @@ function configureMarked(): void {
 
 function escapeHtml(str: string): string {
   return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
+function slugify(text: string): string {
+  return text
+    .toLowerCase()
+    .replace(/<[^>]*>/g, '')        // strip HTML tags
+    .replace(/&[^;]+;/g, '')        // strip HTML entities
+    .replace(/[^\w\s-]/g, '')       // remove non-word chars
+    .replace(/\s+/g, '-')           // spaces to hyphens
+    .replace(/-+/g, '-')            // collapse multiple hyphens
+    .replace(/^-|-$/g, '');         // trim leading/trailing hyphens
 }
 
 function processEmojis(html: string): string {
@@ -313,6 +335,9 @@ async function highlightCodeBlocks(): Promise<void> {
 async function renderContent(mdContent: string): Promise<void> {
   if (!contentEl) return;
 
+  // Reset heading slug counts for each render
+  headingSlugCounts.clear();
+
   let html: string;
   try {
     html = await marked.parse(mdContent);
@@ -369,6 +394,19 @@ export function createPreview(): HTMLElement {
   previewEl.appendChild(contentEl);
 
   configureMarked();
+
+  // Handle anchor link clicks for TOC navigation
+  contentEl.addEventListener('click', (e) => {
+    const anchor = (e.target as HTMLElement).closest('a[href^="#"]') as HTMLAnchorElement | null;
+    if (!anchor) return;
+    e.preventDefault();
+    const targetId = decodeURIComponent(anchor.getAttribute('href')!.slice(1));
+    const target = contentEl.querySelector(`[id="${CSS.escape(targetId)}"]`) as HTMLElement
+      || contentEl.querySelector(`[id="${targetId}"]`) as HTMLElement;
+    if (target) {
+      target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+  });
 
   // Handle scroll sync from editor
   contentEl.addEventListener('scroll', () => {
