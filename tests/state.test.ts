@@ -344,4 +344,47 @@ describe('State Management', () => {
       expect(getState().activeTabId).toBe('auto-1');
     });
   });
+
+  describe('updateTabName()', () => {
+    beforeEach(() => {
+      restoreState({});
+      addTab();
+    });
+
+    it('should rename the specified tab', () => {
+      const id = getState().activeTabId!;
+      updateTabName(id, 'renamed.md');
+      expect(getState().tabs.find(t => t.id === id)?.name).toBe('renamed.md');
+    });
+
+    it('should trim whitespace from name', () => {
+      const id = getState().activeTabId!;
+      updateTabName(id, '  spaced.md  ');
+      expect(getState().tabs.find(t => t.id === id)?.name).toBe('spaced.md');
+    });
+
+    it('should not rename if empty name provided', () => {
+      const id = getState().activeTabId!;
+      const before = getState().tabs.find(t => t.id === id)?.name;
+      updateTabName(id, '   ');
+      expect(getState().tabs.find(t => t.id === id)?.name).toBe(before);
+    });
+
+    it('should emit tab-renamed event with id and new name', () => {
+      const id = getState().activeTabId!;
+      const cb = vi.fn();
+      const unsub = on('tab-renamed', cb);
+      updateTabName(id, 'event-test.md');
+      expect(cb).toHaveBeenCalledWith({ id, name: 'event-test.md' });
+      unsub();
+    });
+
+    it('should not affect other tabs', () => {
+      const id1 = getState().activeTabId!;
+      addTab();
+      const id2 = getState().activeTabId!;
+      updateTabName(id1, 'only-first.md');
+      expect(getState().tabs.find(t => t.id === id2)?.name).not.toBe('only-first.md');
+    });
+  });
 });
