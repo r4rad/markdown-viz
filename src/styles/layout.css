@@ -231,12 +231,32 @@
 
 /* ─── Split handle ─── */
 .split-handle {
-  width: 4px;
+  width: 6px;
   cursor: col-resize;
   background: var(--border-primary);
   transition: background 0.15s;
   flex-shrink: 0;
   z-index: 5;
+  position: relative;
+}
+
+.split-handle::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 2px;
+  height: 32px;
+  border-radius: 1px;
+  background: var(--text-muted);
+  opacity: 0.4;
+  transition: opacity 0.15s, height 0.15s;
+}
+
+.split-handle:hover::after, .split-handle.dragging::after {
+  opacity: 0.8;
+  height: 48px;
 }
 
 .split-handle:hover, .split-handle.dragging {
@@ -556,8 +576,16 @@
   }
   .split-handle {
     width: auto;
-    height: 4px;
+    height: 8px;
     cursor: row-resize;
+  }
+  .split-handle::after {
+    width: 32px;
+    height: 2px;
+  }
+  .split-handle:hover::after, .split-handle.dragging::after {
+    width: 48px;
+    height: 2px;
   }
   .preview-pane {
     border-left: none;

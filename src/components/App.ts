@@ -91,21 +91,28 @@ function createSplitHandle(mainArea: HTMLElement): HTMLElement {
   const handle = document.createElement('div');
   handle.className = 'split-handle';
 
-  let startX = 0;
-  let startWidth = 0;
+  let startPos = 0;
+  let startSize = 0;
 
-  const onMouseMove = (e: MouseEvent) => {
-    const delta = e.clientX - startX;
-    const newWidth = startWidth + delta;
-    const totalWidth = mainArea.clientWidth;
-    const pct = Math.max(15, Math.min(85, (newWidth / totalWidth) * 100));
+  const isMobileLayout = () => window.innerWidth <= 768;
+
+  const resize = (clientPos: number) => {
+    const isVertical = isMobileLayout();
+    const delta = clientPos - startPos;
+    const newSize = startSize + delta;
+    const totalSize = isVertical ? mainArea.clientHeight : mainArea.clientWidth;
+    const pct = Math.max(15, Math.min(85, (newSize / totalSize) * 100));
     const editorPane = mainArea.querySelector('.editor-pane') as HTMLElement;
     const previewPane = mainArea.querySelector('.preview-pane') as HTMLElement;
     if (editorPane && previewPane) {
       editorPane.style.flex = `0 0 ${pct}%`;
-      previewPane.style.flex = `1`;
+      previewPane.style.flex = '1';
     }
     requestAnimationFrame(() => getEditorView()?.requestMeasure());
+  };
+
+  const onMouseMove = (e: MouseEvent) => {
+    resize(isMobileLayout() ? e.clientY : e.clientX);
   };
 
   const onMouseUp = () => {
@@ -118,33 +125,28 @@ function createSplitHandle(mainArea: HTMLElement): HTMLElement {
 
   handle.addEventListener('mousedown', (e) => {
     e.preventDefault();
-    startX = e.clientX;
+    const isVertical = isMobileLayout();
+    startPos = isVertical ? e.clientY : e.clientX;
     const editorPane = mainArea.querySelector('.editor-pane') as HTMLElement;
-    startWidth = editorPane?.offsetWidth ?? 0;
+    startSize = isVertical ? (editorPane?.offsetHeight ?? 0) : (editorPane?.offsetWidth ?? 0);
     handle.classList.add('dragging');
-    document.body.style.cursor = 'col-resize';
+    document.body.style.cursor = isVertical ? 'row-resize' : 'col-resize';
     document.body.style.userSelect = 'none';
     document.addEventListener('mousemove', onMouseMove);
     document.addEventListener('mouseup', onMouseUp);
   });
 
-  // Touch support
   handle.addEventListener('touchstart', (e) => {
     const touch = (e as TouchEvent).touches[0];
-    startX = touch.clientX;
+    const isVertical = isMobileLayout();
+    startPos = isVertical ? touch.clientY : touch.clientX;
     const editorPane = mainArea.querySelector('.editor-pane') as HTMLElement;
-    startWidth = editorPane?.offsetWidth ?? 0;
+    startSize = isVertical ? (editorPane?.offsetHeight ?? 0) : (editorPane?.offsetWidth ?? 0);
     handle.classList.add('dragging');
 
     const onTouchMove = (ev: Event) => {
       const t = (ev as TouchEvent).touches[0];
-      const delta = t.clientX - startX;
-      const newWidth = startWidth + delta;
-      const totalWidth = mainArea.clientWidth;
-      const pct = Math.max(15, Math.min(85, (newWidth / totalWidth) * 100));
-      const ep = mainArea.querySelector('.editor-pane') as HTMLElement;
-      const pp = mainArea.querySelector('.preview-pane') as HTMLElement;
-      if (ep && pp) { ep.style.flex = `0 0 ${pct}%`; pp.style.flex = '1'; }
+      resize(isVertical ? t.clientY : t.clientX);
     };
 
     const onTouchEnd = () => {
