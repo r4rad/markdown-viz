@@ -133,6 +133,12 @@ export function createToolbar(): HTMLElement {
     <div class="toolbar-group" id="auth-area"></div>
 
     <div class="toolbar-group">
+      <button class="toolbar-btn sync-cloud-btn" data-action="cloud-sync" id="cloud-sync-btn" title="Sync to cloud (Ctrl+S)" style="display:none">
+        ${icon('cloud-sync')}
+      </button>
+    </div>
+
+    <div class="toolbar-group">
       <button class="toolbar-btn settings-btn" data-action="open-settings" title="Settings">${icon('gear')}</button>
     </div>
   `;
@@ -145,6 +151,12 @@ export function createToolbar(): HTMLElement {
   });
 
   on('layout-changed', () => updateLayoutButtons(el));
+
+  // Show/hide cloud-sync button based on auth state
+  on('auth-changed', (profile: unknown) => {
+    const btn = el.querySelector('#cloud-sync-btn') as HTMLElement | null;
+    if (btn) btn.style.display = profile ? '' : 'none';
+  });
 
   return el;
 }
@@ -239,6 +251,9 @@ function setupToolbarEvents(toolbar: HTMLElement): void {
         }
         break;
       }
+      case 'cloud-sync':
+        emit('cloud-sync-request');
+        break;
       case 'import':
         emit('import-file');
         break;
