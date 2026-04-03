@@ -557,6 +557,10 @@
 }
 
 /* ─── Responsive ─── */
+.mobile-only {
+  display: none !important;
+}
+
 @media (max-width: 768px) {
   .toolbar {
     padding: 0 4px;
@@ -567,6 +571,9 @@
   }
   .desktop-only {
     display: none !important;
+  }
+  .mobile-only {
+    display: flex !important;
   }
   .settings-btn {
     display: inline-flex !important;
@@ -809,4 +816,213 @@
 .settings-auth-email {
   font-size: 11px;
   color: var(--text-muted);
+}
+
+/* ─── User Profile & Space ─── */
+.profile-card {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px;
+  margin-bottom: 10px;
+  background: var(--bg-secondary, var(--bg-primary));
+  border-radius: 8px;
+  border: 1px solid var(--border-secondary, var(--border-primary));
+}
+
+.profile-avatar {
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  border: 2px solid var(--accent);
+}
+
+.profile-avatar-placeholder {
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  background: var(--accent);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--bg-primary);
+  font-size: 18px;
+  font-weight: 700;
+}
+
+.profile-details {
+  min-width: 0;
+  flex: 1;
+}
+
+.profile-name {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.profile-email {
+  font-size: 11px;
+  color: var(--text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.profile-provider {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 10px;
+  color: var(--text-muted);
+  margin-top: 2px;
+}
+
+.profile-provider .icon {
+  width: 12px;
+  height: 12px;
+}
+
+.profile-provider .icon svg {
+  width: 12px;
+  height: 12px;
+}
+
+.space-banner {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  margin-bottom: 8px;
+  background: color-mix(in srgb, var(--accent) 10%, transparent);
+  border: 1px solid color-mix(in srgb, var(--accent) 30%, transparent);
+  border-radius: 6px;
+  font-size: 11px;
+  color: var(--text-secondary);
+}
+
+.space-banner .badge {
+  font-size: 10px;
+  font-weight: 700;
+  padding: 1px 6px;
+  border-radius: 10px;
+  background: var(--accent);
+  color: var(--bg-primary);
+  white-space: nowrap;
+}
+
+.space-doc-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.space-doc-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  border-radius: 4px;
+  font-size: 12px;
+  color: var(--text-primary);
+  transition: background 0.1s;
+}
+
+.space-doc-item:hover {
+  background: var(--bg-hover);
+}
+
+.space-doc-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.space-doc-date {
+  font-size: 10px;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+.space-doc-remove {
+  width: 22px;
+  height: 22px;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 14px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  opacity: 0;
+  transition: opacity 0.15s, color 0.15s, background 0.15s;
+}
+
+.space-doc-item:hover .space-doc-remove {
+  opacity: 1;
+}
+
+.space-doc-remove:hover {
+  background: var(--bg-active);
+  color: var(--error, #e53935);
+}
+
+.space-empty {
+  font-size: 12px;
+  color: var(--text-muted);
+  padding: 8px 4px;
+  font-style: italic;
+}
+
+/* ─── Sign In Buttons (prominent) ─── */
+.signin-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  width: 100%;
+  height: 38px;
+  padding: 0 16px;
+  border: 1px solid var(--border-primary);
+  border-radius: 8px;
+  background: var(--bg-secondary, var(--bg-primary));
+  color: var(--text-primary);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s, box-shadow 0.15s;
+  margin-bottom: 6px;
+}
+
+.signin-btn:hover {
+  background: var(--bg-hover);
+  border-color: var(--accent);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent) 20%, transparent);
+}
+
+.signin-btn .icon {
+  width: 18px;
+  height: 18px;
+}
+
+.signin-btn .icon svg {
+  width: 18px;
+  height: 18px;
+}
+
+.signin-description {
+  font-size: 11px;
+  color: var(--text-muted);
+  padding: 0 4px 10px;
+  line-height: 1.5;
 }

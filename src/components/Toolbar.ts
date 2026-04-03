@@ -39,6 +39,15 @@ export function createToolbar(): HTMLElement {
       <button class="toolbar-btn" data-action="beautify" title="Beautify (Ctrl+Shift+F)">${icon('wand')}<span class="btn-label">Beautify</span></button>
     </div>
 
+    <div class="toolbar-group mobile-only">
+      <button class="toolbar-btn" data-action="bold" title="Bold">${icon('bold')}</button>
+      <button class="toolbar-btn" data-action="italic" title="Italic">${icon('italic')}</button>
+      <button class="toolbar-btn" data-action="heading" title="Heading">${icon('heading')}</button>
+      <button class="toolbar-btn" data-action="code" title="Code">${icon('code')}</button>
+      <button class="toolbar-btn" data-action="link" title="Link">${icon('link')}</button>
+      <button class="toolbar-btn" data-action="beautify" title="Beautify">${icon('wand')}</button>
+    </div>
+
     <span class="toolbar-spacer"></span>
 
     <div class="toolbar-group desktop-only">
