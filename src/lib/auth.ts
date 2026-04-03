@@ -99,6 +99,7 @@ export function isFirebaseReady(): boolean {
 
 export async function syncToCloud(state: AppState): Promise<void> {
   if (!db || !currentUser) return;
+  const MAX_SYNC_TABS = 5;
   try {
     const userRef = doc(db, 'users', currentUser.uid);
     await setDoc(userRef, {
@@ -107,8 +108,23 @@ export async function syncToCloud(state: AppState): Promise<void> {
       updatedAt: Date.now(),
     }, { merge: true });
 
+    // Sync only the most recently updated tabs (max 5)
+    const sortedTabs = [...state.tabs]
+      .sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0))
+      .slice(0, MAX_SYNC_TABS);
+
     const filesRef = collection(db, 'users', currentUser.uid, 'files');
-    for (const tab of state.tabs) {
+
+    // Remove old cloud files not in synced set
+    const existingSnap = await getDocs(filesRef);
+    const syncIds = new Set(sortedTabs.map(t => t.id));
+    for (const d of existingSnap.docs) {
+      if (!syncIds.has(d.id)) {
+        await deleteDoc(d.ref);
+      }
+    }
+
+    for (const tab of sortedTabs) {
       await setDoc(doc(filesRef, tab.id), {
         name: tab.name,
         content: tab.content,
@@ -118,6 +134,10 @@ export async function syncToCloud(state: AppState): Promise<void> {
         updatedAt: tab.updatedAt,
         createdAt: tab.createdAt,
       });
+    }
+
+    if (state.tabs.length > MAX_SYNC_TABS) {
+      console.info(`Cloud sync: synced ${MAX_SYNC_TABS} of ${state.tabs.length} tabs (most recent).`);
     }
   } catch (e) {
     console.error('Cloud sync failed:', e);
