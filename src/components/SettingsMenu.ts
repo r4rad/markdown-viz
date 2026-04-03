@@ -68,9 +68,10 @@ function renderPanelContent(): void {
 
   content.innerHTML = '';
 
-  // ─── Account / Profile Section (top priority) ───
+  // ─── Account / Profile Section (top priority, mobile only) ───
   if (isFirebaseReady()) {
     const authSection = createSection('Account');
+    authSection.classList.add('settings-mobile-auth'); // hidden on desktop via CSS
     if (authProfile) {
       // Profile card
       const card = document.createElement('div');
