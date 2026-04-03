@@ -31,53 +31,52 @@ const EMOJI_MAP: Record<string, string> = {
   penguin: '🐧', snake: '🐍', whale: '🐳', dog: '🐶', cat: '🐱',
 };
 
+const ALERT_ICONS: Record<string, string> = {
+  note: 'ℹ️', tip: '💡', important: '🔮', warning: '⚠️', caution: '🔴',
+};
+
 function configureMarked(): void {
-  marked.setOptions({
+  // Use marked.use() with proper v17 API for renderer overrides
+  marked.use({
     gfm: true,
     breaks: true,
+    renderer: {
+      // Custom code block renderer for diagrams
+      code({ text, lang }: { text: string; lang?: string; escaped?: boolean }): string {
+        const language = (lang || '').toLowerCase().trim();
+
+        if (language === 'mermaid') {
+          return `<div class="diagram-container" data-diagram="mermaid" data-source="${encodeURIComponent(text)}"><pre class="mermaid">${escapeHtml(text)}</pre></div>`;
+        }
+
+        if (language === 'dot' || language === 'graphviz') {
+          return `<div class="diagram-container" data-diagram="graphviz" data-source="${encodeURIComponent(text)}"><pre class="graphviz-pending">${escapeHtml(text)}</pre></div>`;
+        }
+
+        if (language === 'nomnoml') {
+          return `<div class="diagram-container" data-diagram="nomnoml" data-source="${encodeURIComponent(text)}"><pre class="nomnoml-pending">${escapeHtml(text)}</pre></div>`;
+        }
+
+        // Default: render with language class for highlight.js
+        const langClass = lang ? ` class="language-${escapeHtml(lang)}"` : '';
+        return `<pre><code${langClass}>${escapeHtml(text)}</code></pre>\n`;
+      },
+
+      // GitHub-style alerts via blockquote renderer
+      blockquote(this: any, { tokens }: { tokens: any[] }): string {
+        // Parse inner tokens to HTML using the parser
+        const body = this.parser.parse(tokens);
+        const alertMatch = body.match(/^\s*<p>\[!(NOTE|TIP|IMPORTANT|WARNING|CAUTION)\]\s*/i);
+        if (alertMatch) {
+          const type = alertMatch[1].toLowerCase();
+          const icon = ALERT_ICONS[type] || '';
+          const content = body.replace(alertMatch[0], '<p>');
+          return `<div class="alert alert-${type}"><div class="alert-title">${icon} ${type.charAt(0).toUpperCase() + type.slice(1)}</div>${content}</div>`;
+        }
+        return `<blockquote>\n${body}</blockquote>\n`;
+      },
+    },
   });
-
-  const renderer = new marked.Renderer();
-
-  // Custom code block renderer for diagrams
-  const origCode = renderer.code.bind(renderer);
-  renderer.code = function (token: any): string {
-    const text: string = token.text ?? '';
-    const lang: string = token.lang ?? '';
-    const language = lang.toLowerCase().trim();
-
-    if (language === 'mermaid') {
-      return `<div class="diagram-container" data-diagram="mermaid" data-source="${encodeURIComponent(text)}"><pre class="mermaid">${escapeHtml(text)}</pre></div>`;
-    }
-
-    if (language === 'dot' || language === 'graphviz') {
-      return `<div class="diagram-container" data-diagram="graphviz" data-source="${encodeURIComponent(text)}"><pre class="graphviz-pending">${escapeHtml(text)}</pre></div>`;
-    }
-
-    if (language === 'nomnoml') {
-      return `<div class="diagram-container" data-diagram="nomnoml" data-source="${encodeURIComponent(text)}"><pre class="nomnoml-pending">${escapeHtml(text)}</pre></div>`;
-    }
-
-    return origCode.call(this, token);
-  };
-
-  // GitHub-style alerts
-  const origBlockquote = renderer.blockquote.bind(renderer);
-  renderer.blockquote = function (token: any): string {
-    const text: string = typeof token === 'string' ? token : (token.text ?? token.body ?? '');
-    const alertMatch = text.match(/^\s*<p>\[!(NOTE|TIP|IMPORTANT|WARNING|CAUTION)\]\s*/i);
-    if (alertMatch) {
-      const type = alertMatch[1].toLowerCase();
-      const icons: Record<string, string> = {
-        note: 'ℹ️', tip: '💡', important: '🔮', warning: '⚠️', caution: '🔴',
-      };
-      const content = text.replace(alertMatch[0], '<p>');
-      return `<div class="alert alert-${type}"><div class="alert-title">${icons[type] || ''} ${type.charAt(0).toUpperCase() + type.slice(1)}</div>${content}</div>`;
-    }
-    return origBlockquote.call(this, token);
-  };
-
-  marked.use({ renderer });
 }
 
 function escapeHtml(str: string): string {
@@ -314,7 +313,19 @@ async function highlightCodeBlocks(): Promise<void> {
 async function renderContent(mdContent: string): Promise<void> {
   if (!contentEl) return;
 
-  let html = await marked.parse(mdContent);
+  let html: string;
+  try {
+    html = await marked.parse(mdContent);
+  } catch (err) {
+    console.warn('Markdown parse error, attempting recovery:', err);
+    try {
+      // Fallback: parse with minimal options
+      html = await marked.parse(mdContent, { gfm: true, breaks: false });
+    } catch {
+      html = `<pre>${escapeHtml(mdContent)}</pre>`;
+    }
+  }
+
   html = processEmojis(html);
 
   // Load KaTeX if math is present
@@ -324,8 +335,8 @@ async function renderContent(mdContent: string): Promise<void> {
   }
 
   html = DOMPurify.sanitize(html, {
-    ADD_TAGS: ['svg', 'path', 'circle', 'rect', 'line', 'polyline', 'polygon', 'text', 'g', 'defs', 'marker', 'foreignObject', 'style', 'clipPath', 'use', 'image', 'pattern', 'linearGradient', 'radialGradient', 'stop', 'tspan', 'desc', 'title'],
-    ADD_ATTR: ['viewBox', 'xmlns', 'fill', 'stroke', 'stroke-width', 'd', 'transform', 'cx', 'cy', 'r', 'x', 'y', 'width', 'height', 'x1', 'y1', 'x2', 'y2', 'points', 'rx', 'ry', 'text-anchor', 'dominant-baseline', 'font-size', 'font-family', 'font-weight', 'class', 'id', 'marker-end', 'marker-start', 'clip-path', 'href', 'xlink:href', 'style', 'data-diagram', 'data-source', 'data-highlighted'],
+    ADD_TAGS: ['svg', 'path', 'circle', 'rect', 'line', 'polyline', 'polygon', 'text', 'g', 'defs', 'marker', 'foreignObject', 'style', 'clipPath', 'use', 'image', 'pattern', 'linearGradient', 'radialGradient', 'stop', 'tspan', 'desc', 'title', 'ellipse'],
+    ADD_ATTR: ['viewBox', 'xmlns', 'fill', 'stroke', 'stroke-width', 'd', 'transform', 'cx', 'cy', 'r', 'x', 'y', 'width', 'height', 'x1', 'y1', 'x2', 'y2', 'points', 'rx', 'ry', 'text-anchor', 'dominant-baseline', 'font-size', 'font-family', 'font-weight', 'class', 'id', 'marker-end', 'marker-start', 'clip-path', 'href', 'xlink:href', 'style', 'data-diagram', 'data-source', 'data-highlighted', 'role', 'aria-roledescription', 'aria-label', 'tabindex', 'data-id', 'data-node-id'],
     ALLOW_UNKNOWN_PROTOCOLS: true,
   });
 
