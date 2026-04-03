@@ -80,7 +80,7 @@ export function createToolbar(): HTMLElement {
       </div>
     </div>
 
-    <div class="toolbar-group desktop-only" id="auth-area"></div>
+    <div class="toolbar-group" id="auth-area"></div>
 
     <div class="toolbar-group">
       <button class="toolbar-btn settings-btn" data-action="open-settings" title="Settings">${icon('gear')}</button>

@@ -1,4 +1,4 @@
-import { initializeApp, type FirebaseApp } from 'firebase/app';
+import { initializeApp, getApps, getApp, type FirebaseApp } from 'firebase/app';
 import {
   getAuth,
   signInWithPopup,
@@ -34,7 +34,7 @@ let currentUser: User | null = null;
 export function initFirebase(): void {
   if (!isFirebaseConfigured()) return;
   try {
-    app = initializeApp(firebaseConfig);
+    app = getApps().length ? getApp() : initializeApp(firebaseConfig);
     auth = getAuth(app);
     db = getFirestore(app);
 
@@ -61,7 +61,8 @@ export function initFirebase(): void {
       }
     });
   } catch (e) {
-    console.warn('Firebase init failed:', e);
+    console.error('Firebase init failed:', e);
+    throw e;
   }
 }
 
