@@ -148,10 +148,12 @@ export function updateTabCursor(id: string, pos: number, scrollTop: number): voi
 }
 
 export function updateTabName(id: string, name: string): void {
+  const trimmed = name.trim();
+  if (!trimmed) return;
   const tab = state.tabs.find(t => t.id === id);
   if (!tab) return;
-  tab.name = name;
-  emit('tab-renamed', { id, name });
+  tab.name = trimmed;
+  emit('tab-renamed', { id, name: trimmed });
   emit('state-changed', state);
 }
 

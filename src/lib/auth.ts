@@ -117,9 +117,14 @@ export function isFirebaseReady(): boolean {
 
 // ─── Cloud Sync ───
 
+export function getMaxSyncTabs(): number {
+  const fromEnv = Number(import.meta.env.VITE_MAX_SYNC_TABS);
+  return (Number.isFinite(fromEnv) && fromEnv > 0) ? fromEnv : 5;
+}
+
 export async function syncToCloud(state: AppState): Promise<boolean> {
   if (!db || !currentUser) return false;
-  const MAX_SYNC_TABS = 5;
+  const MAX_SYNC_TABS = getMaxSyncTabs();
   try {
     const userRef = doc(db, 'users', currentUser.uid);
     await setDoc(userRef, {
@@ -128,7 +133,7 @@ export async function syncToCloud(state: AppState): Promise<boolean> {
       updatedAt: Date.now(),
     }, { merge: true });
 
-    // Sync only the most recently updated tabs (max 5)
+    // Sync only the most recently updated tabs (up to limit)
     const sortedTabs = [...state.tabs]
       .sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0))
       .slice(0, MAX_SYNC_TABS);
@@ -163,6 +168,19 @@ export async function syncToCloud(state: AppState): Promise<boolean> {
   } catch (e) {
     console.error('Cloud sync failed:', e);
     return false;
+  }
+}
+
+export async function updateCloudFileName(tabId: string, newName: string): Promise<void> {
+  if (!db || !currentUser) return;
+  try {
+    const fileRef = doc(db, 'users', currentUser.uid, 'files', tabId);
+    const snap = await getDoc(fileRef);
+    if (snap.exists()) {
+      await setDoc(fileRef, { name: newName, updatedAt: Date.now() }, { merge: true });
+    }
+  } catch (e) {
+    console.error('Cloud rename failed:', e);
   }
 }
 
