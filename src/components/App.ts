@@ -9,11 +9,12 @@ import { getState, addTab, restoreState, toggleEditor, togglePreview } from '../
 import { on, emit } from '../lib/events';
 import { loadState, debouncedSave } from '../lib/storage';
 import { applyTheme, getSavedTheme } from '../themes/themes';
-import { setupImport, openFilePicker, importFromGitHubURL } from '../lib/import';
+import { setupImport, openFilePicker } from '../lib/import';
 import { exportMarkdown, exportHTML, exportPDF } from '../lib/export';
 import { beautifyMarkdown } from '../lib/beautifier';
-import { initFirebase } from '../lib/auth';
+import { initFirebase, syncToCloud, updateCloudFileName, isAuthenticated } from '../lib/auth';
 import { initAuthUI } from './AuthUI';
+import type { UserProfile } from '../types';
 
 export async function initApp(): Promise<void> {
   const app = document.getElementById('app')!;
@@ -49,6 +50,7 @@ export async function initApp(): Promise<void> {
   setupKeyboardShortcuts();
   initFirebase();
   initAuthUI();
+  setupAutoSync();
 
   // Wire up events
   on('import-file', () => openFilePicker());
@@ -67,6 +69,17 @@ export async function initApp(): Promise<void> {
   });
 
   on('beautify', () => beautifyMarkdown());
+
+  // Cloud sync button + Ctrl+S
+  on('cloud-sync-request', () => triggerCloudSync());
+
+  // Rename cloud file when tab is renamed
+  on('tab-renamed', (data: unknown) => {
+    const { id, name } = data as { id: string; name: string };
+    if (isAuthenticated()) {
+      updateCloudFileName(id, name).catch(console.error);
+    }
+  });
 
   // Layout visibility
   on('layout-changed', () => {
@@ -181,9 +194,46 @@ function setupKeyboardShortcuts(): void {
     } else if (ctrl && e.key === 's') {
       e.preventDefault();
       debouncedSaveNow();
+      if (isAuthenticated()) {
+        triggerCloudSync();
+      }
     } else if (ctrl && e.key === 'n') {
       e.preventDefault();
       addTab();
+    }
+  });
+}
+
+let cloudSyncBusy = false;
+async function triggerCloudSync(): Promise<void> {
+  if (cloudSyncBusy || !isAuthenticated()) return;
+  cloudSyncBusy = true;
+
+  const btn = document.getElementById('cloud-sync-btn');
+  if (btn) btn.classList.add('syncing');
+
+  const ok = await syncToCloud(getState());
+
+  if (btn) {
+    btn.classList.remove('syncing');
+    btn.classList.add(ok ? 'sync-ok' : 'sync-fail');
+    setTimeout(() => btn.classList.remove('sync-ok', 'sync-fail'), 1500);
+  }
+  cloudSyncBusy = false;
+}
+
+let autoSyncTimer: ReturnType<typeof setInterval> | null = null;
+
+function setupAutoSync(): void {
+  const intervalSec = Number(import.meta.env.VITE_AUTO_SYNC_INTERVAL_SECONDS ?? 60);
+  const intervalMs = (Number.isFinite(intervalSec) && intervalSec > 0 ? intervalSec : 60) * 1000;
+
+  on('auth-changed', (profile: unknown) => {
+    if (autoSyncTimer) { clearInterval(autoSyncTimer); autoSyncTimer = null; }
+    if (profile) {
+      autoSyncTimer = setInterval(() => {
+        if (isAuthenticated()) syncToCloud(getState()).catch(console.error);
+      }, intervalMs);
     }
   });
 }
@@ -206,7 +256,7 @@ function createBetaBanner(): HTMLElement {
     <span>🚧 <strong>Beta</strong> — work is always saved locally.
     Sign in to sync up to <strong>5 documents</strong> across your devices for free.</span>
     <div class="beta-banner-actions">
-      <button class="beta-banner-link" id="beta-signin-link">Sign in</button>
+      <button class="beta-banner-link beta-signin-btn">Sign in</button>
       <button class="beta-banner-dismiss" title="Dismiss">×</button>
     </div>
   `;
@@ -216,10 +266,15 @@ function createBetaBanner(): HTMLElement {
     banner.remove();
   });
 
-  banner.querySelector('#beta-signin-link')!.addEventListener('click', () => {
+  banner.querySelector('.beta-signin-btn')!.addEventListener('click', () => {
     openSettingsMenu();
+  });
+
+  // Hide the sign-in button once user is logged in
+  on('auth-changed', (profile: unknown) => {
+    const signInBtn = banner.querySelector('.beta-signin-btn') as HTMLElement | null;
+    if (signInBtn) signInBtn.style.display = (profile as UserProfile | null) ? 'none' : '';
   });
 
   return banner;
 }
-
