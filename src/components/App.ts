@@ -4,7 +4,7 @@ import { createEditor, getEditorView } from './Editor';
 import { createPreview } from './Preview';
 import { createStatusBar } from './StatusBar';
 import { initDiagramModal } from './DiagramModal';
-import { initSettingsMenu } from './SettingsMenu';
+import { initSettingsMenu, openSettingsMenu } from './SettingsMenu';
 import { getState, addTab, restoreState, toggleEditor, togglePreview } from '../lib/state';
 import { on, emit } from '../lib/events';
 import { loadState, debouncedSave } from '../lib/storage';
@@ -40,7 +40,7 @@ export async function initApp(): Promise<void> {
   const statusBar = createStatusBar();
 
   mainArea.append(editorPane, splitHandle, previewPane);
-  app.append(toolbar, tabBar, mainArea, statusBar);
+  app.append(toolbar, tabBar, createBetaBanner(), mainArea, statusBar);
 
   // Initialize subsystems
   initDiagramModal();
@@ -191,3 +191,35 @@ function setupKeyboardShortcuts(): void {
 function debouncedSaveNow(): void {
   debouncedSave(getState(), 0);
 }
+
+function createBetaBanner(): HTMLElement {
+  const DISMISS_KEY = 'mv-beta-banner-dismissed';
+  const banner = document.createElement('div');
+  banner.className = 'beta-banner';
+
+  if (sessionStorage.getItem(DISMISS_KEY)) {
+    banner.style.display = 'none';
+    return banner;
+  }
+
+  banner.innerHTML = `
+    <span>🚧 <strong>Beta</strong> — work is always saved locally.
+    Sign in to sync up to <strong>5 documents</strong> across your devices for free.</span>
+    <div class="beta-banner-actions">
+      <button class="beta-banner-link" id="beta-signin-link">Sign in</button>
+      <button class="beta-banner-dismiss" title="Dismiss">×</button>
+    </div>
+  `;
+
+  banner.querySelector('.beta-banner-dismiss')!.addEventListener('click', () => {
+    sessionStorage.setItem(DISMISS_KEY, '1');
+    banner.remove();
+  });
+
+  banner.querySelector('#beta-signin-link')!.addEventListener('click', () => {
+    openSettingsMenu();
+  });
+
+  return banner;
+}
+
