@@ -117,8 +117,8 @@ export function isFirebaseReady(): boolean {
 
 // ─── Cloud Sync ───
 
-export async function syncToCloud(state: AppState): Promise<void> {
-  if (!db || !currentUser) return;
+export async function syncToCloud(state: AppState): Promise<boolean> {
+  if (!db || !currentUser) return false;
   const MAX_SYNC_TABS = 5;
   try {
     const userRef = doc(db, 'users', currentUser.uid);
@@ -159,8 +159,10 @@ export async function syncToCloud(state: AppState): Promise<void> {
     if (state.tabs.length > MAX_SYNC_TABS) {
       console.info(`Cloud sync: synced ${MAX_SYNC_TABS} of ${state.tabs.length} tabs (most recent).`);
     }
+    return true;
   } catch (e) {
     console.error('Cloud sync failed:', e);
+    return false;
   }
 }
 
