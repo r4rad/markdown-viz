@@ -4,6 +4,7 @@ import { createEditor, getEditorView } from './Editor';
 import { createPreview } from './Preview';
 import { createStatusBar } from './StatusBar';
 import { initDiagramModal } from './DiagramModal';
+import { initSettingsMenu } from './SettingsMenu';
 import { getState, addTab, restoreState, toggleEditor, togglePreview } from '../lib/state';
 import { on, emit } from '../lib/events';
 import { loadState, debouncedSave } from '../lib/storage';
@@ -43,6 +44,7 @@ export async function initApp(): Promise<void> {
 
   // Initialize subsystems
   initDiagramModal();
+  initSettingsMenu();
   setupImport();
   setupKeyboardShortcuts();
   initFirebase();

@@ -2,6 +2,7 @@ import { icon } from './icons';
 import { themes, applyTheme } from '../themes/themes';
 import { getState, setTheme, addTab, toggleSyncScroll, togglePreview, toggleEditor } from '../lib/state';
 import { emit, on } from '../lib/events';
+import { openSettingsMenu } from './SettingsMenu';
 
 export function createToolbar(): HTMLElement {
   const el = document.createElement('div');
@@ -13,7 +14,7 @@ export function createToolbar(): HTMLElement {
       <span class="brand-text">MarkdownViz</span>
     </div>
 
-    <div class="toolbar-group">
+    <div class="toolbar-group desktop-only">
       <button class="toolbar-btn" data-action="bold" title="Bold (Ctrl+B)">${icon('bold')}</button>
       <button class="toolbar-btn" data-action="italic" title="Italic (Ctrl+I)">${icon('italic')}</button>
       <button class="toolbar-btn" data-action="heading" title="Heading">${icon('heading')}</button>
@@ -22,9 +23,9 @@ export function createToolbar(): HTMLElement {
       <button class="toolbar-btn" data-action="image" title="Image">${icon('image')}</button>
     </div>
 
-    <span class="toolbar-separator"></span>
+    <span class="toolbar-separator desktop-only"></span>
 
-    <div class="toolbar-group">
+    <div class="toolbar-group desktop-only">
       <button class="toolbar-btn" data-action="list" title="Bullet list">${icon('list')}</button>
       <button class="toolbar-btn" data-action="checklist" title="Task list">${icon('checklist')}</button>
       <button class="toolbar-btn" data-action="table" title="Table">${icon('table')}</button>
@@ -32,15 +33,15 @@ export function createToolbar(): HTMLElement {
       <button class="toolbar-btn" data-action="hr" title="Horizontal rule">${icon('hr')}</button>
     </div>
 
-    <span class="toolbar-separator"></span>
+    <span class="toolbar-separator desktop-only"></span>
 
-    <div class="toolbar-group">
+    <div class="toolbar-group desktop-only">
       <button class="toolbar-btn" data-action="beautify" title="Beautify (Ctrl+Shift+F)">${icon('wand')}<span class="btn-label">Beautify</span></button>
     </div>
 
     <span class="toolbar-spacer"></span>
 
-    <div class="toolbar-group">
+    <div class="toolbar-group desktop-only">
       <button class="toolbar-btn" data-action="import" title="Import file">${icon('upload')}<span class="btn-label">Import</span></button>
       <div class="dropdown">
         <button class="toolbar-btn" data-action="export-toggle" title="Export">${icon('download')}<span class="btn-label">Export</span></button>
@@ -52,25 +53,29 @@ export function createToolbar(): HTMLElement {
       </div>
     </div>
 
-    <span class="toolbar-separator"></span>
+    <span class="toolbar-separator desktop-only"></span>
 
-    <div class="toolbar-group">
+    <div class="toolbar-group desktop-only">
       <button class="toolbar-btn" data-action="toggle-editor" title="Toggle editor">${icon('edit')}</button>
       <button class="toolbar-btn" data-action="toggle-preview" title="Toggle preview">${icon('eye')}</button>
       <button class="toolbar-btn active" data-action="toggle-split" title="Split view">${icon('columns')}</button>
       <button class="toolbar-btn active" data-action="toggle-sync" title="Sync scroll">${icon('sync')}</button>
     </div>
 
-    <span class="toolbar-separator"></span>
+    <span class="toolbar-separator desktop-only"></span>
 
-    <div class="toolbar-group">
+    <div class="toolbar-group desktop-only">
       <div class="dropdown">
         <button class="toolbar-btn" data-action="theme-toggle" title="Theme">${icon('palette')}</button>
         <div class="dropdown-menu" id="theme-menu"></div>
       </div>
     </div>
 
-    <div class="toolbar-group" id="auth-area"></div>
+    <div class="toolbar-group desktop-only" id="auth-area"></div>
+
+    <div class="toolbar-group">
+      <button class="toolbar-btn settings-btn" data-action="open-settings" title="Settings">${icon('gear')}</button>
+    </div>
   `;
 
   setupToolbarEvents(el);
@@ -175,6 +180,9 @@ function setupToolbarEvents(toolbar: HTMLElement): void {
       }
       case 'import':
         emit('import-file');
+        break;
+      case 'open-settings':
+        openSettingsMenu();
         break;
       default:
         emit('toolbar-action', action);

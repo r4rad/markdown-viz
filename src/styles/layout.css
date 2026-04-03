@@ -545,6 +545,12 @@
   .toolbar-btn .btn-label {
     display: none;
   }
+  .desktop-only {
+    display: none !important;
+  }
+  .settings-btn {
+    display: inline-flex !important;
+  }
   .main-area {
     flex-direction: column;
   }
@@ -570,4 +576,209 @@
   .toolbar-brand .brand-text {
     display: none;
   }
+}
+
+/* ─── Settings Panel ─── */
+.settings-overlay {
+  position: fixed;
+  inset: 0;
+  background: var(--bg-overlay, rgba(0,0,0,0.5));
+  z-index: 500;
+  display: flex;
+  justify-content: flex-end;
+}
+
+.settings-panel {
+  width: 320px;
+  max-width: 90vw;
+  height: 100%;
+  background: var(--bg-primary);
+  border-left: 1px solid var(--border-primary);
+  box-shadow: var(--shadow-lg, -4px 0 12px rgba(0,0,0,0.2));
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  animation: settings-slide-in 0.2s ease-out;
+}
+
+@keyframes settings-slide-in {
+  from { transform: translateX(100%); }
+  to { transform: translateX(0); }
+}
+
+.settings-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--border-primary);
+  flex-shrink: 0;
+}
+
+.settings-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.settings-close {
+  width: 28px;
+  height: 28px;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: 20px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.settings-close:hover {
+  background: var(--bg-hover);
+  color: var(--error, #e53935);
+}
+
+.settings-content {
+  flex: 1;
+  overflow-y: auto;
+  padding: 8px 12px 24px;
+}
+
+.settings-section {
+  margin-bottom: 16px;
+}
+
+.settings-section-label {
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.8px;
+  color: var(--text-muted);
+  padding: 8px 4px 6px;
+}
+
+.settings-sublabel {
+  font-size: 10px;
+  color: var(--text-muted);
+  padding: 6px 4px 4px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.settings-btn-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.settings-action-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 32px;
+  padding: 0 10px;
+  border: 1px solid var(--border-secondary, var(--border-primary));
+  border-radius: 6px;
+  background: var(--bg-secondary, var(--bg-primary));
+  color: var(--text-primary);
+  font-size: 12px;
+  cursor: pointer;
+  transition: background 0.1s, border-color 0.1s;
+}
+
+.settings-action-btn:hover {
+  background: var(--bg-hover);
+  border-color: var(--accent);
+}
+
+.settings-action-btn.active {
+  background: var(--bg-active);
+  color: var(--accent);
+  border-color: var(--accent);
+}
+
+.settings-action-btn.wide {
+  width: 100%;
+  justify-content: center;
+}
+
+.settings-action-btn .icon {
+  width: 14px;
+  height: 14px;
+}
+
+.settings-action-btn .icon svg {
+  width: 14px;
+  height: 14px;
+}
+
+.settings-theme-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.settings-theme-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 28px;
+  padding: 0 8px;
+  border: 1px solid var(--border-secondary, var(--border-primary));
+  border-radius: 4px;
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: 11px;
+  cursor: pointer;
+  transition: background 0.1s, color 0.1s;
+  white-space: nowrap;
+}
+
+.settings-theme-btn:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+.settings-theme-btn.active {
+  background: var(--bg-active);
+  color: var(--accent);
+  border-color: var(--accent);
+}
+
+.theme-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.settings-auth-info {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px;
+  margin-bottom: 8px;
+  background: var(--bg-secondary, var(--bg-primary));
+  border-radius: 6px;
+  border: 1px solid var(--border-secondary, var(--border-primary));
+}
+
+.settings-avatar {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.settings-auth-name {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.settings-auth-email {
+  font-size: 11px;
+  color: var(--text-muted);
 }

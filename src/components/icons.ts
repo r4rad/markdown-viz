@@ -28,6 +28,7 @@ const ICONS: Record<string, string> = {
   quote: `<svg viewBox="0 0 16 16" fill="currentColor"><path d="M3 3h4l-1 4H4l-1 6H1l1-6V3zm7 0h4l-1 4h-2l-1 6H8l1-6V3z"/></svg>`,
   hr: `<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><line x1="2" y1="8" x2="14" y2="8"/></svg>`,
   checklist: `<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3"><rect x="1" y="2" width="4" height="4" rx="0.5"/><path d="M2 4.5l1 1 2-2.5"/><line x1="7" y1="4" x2="15" y2="4"/><rect x="1" y="10" width="4" height="4" rx="0.5"/><line x1="7" y1="12" x2="15" y2="12"/></svg>`,
+  gear: `<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3"><circle cx="8" cy="8" r="2.5"/><path d="M8 1l.7 2.2a4.5 4.5 0 0 1 1.8 1l2.1-.7 1 1.7-1.4 1.6a4.5 4.5 0 0 1 0 2.1l1.4 1.6-1 1.7-2.1-.7a4.5 4.5 0 0 1-1.8 1L8 15l-.7-2.2a4.5 4.5 0 0 1-1.8-1l-2.1.7-1-1.7 1.4-1.6a4.5 4.5 0 0 1 0-2.1L2.4 5.5l1-1.7 2.1.7a4.5 4.5 0 0 1 1.8-1L8 1z"/></svg>`,
 };
 
 export function icon(name: string, cls = ''): string {
