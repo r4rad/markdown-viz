@@ -39,13 +39,63 @@ export function createToolbar(): HTMLElement {
       <button class="toolbar-btn" data-action="beautify" title="Beautify (Ctrl+Shift+F)">${icon('wand')}<span class="btn-label">Beautify</span></button>
     </div>
 
-    <div class="toolbar-group mobile-only">
-      <button class="toolbar-btn" data-action="bold" title="Bold">${icon('bold')}</button>
-      <button class="toolbar-btn" data-action="italic" title="Italic">${icon('italic')}</button>
-      <button class="toolbar-btn" data-action="heading" title="Heading">${icon('heading')}</button>
-      <button class="toolbar-btn" data-action="code" title="Code">${icon('code')}</button>
-      <button class="toolbar-btn" data-action="link" title="Link">${icon('link')}</button>
-      <button class="toolbar-btn" data-action="beautify" title="Beautify">${icon('wand')}</button>
+    <div class="toolbar-group mobile-only mobile-toolbar-scroll">
+      <button class="toolbar-btn" data-action="bold" title="Bold">
+        ${icon('bold')}
+      </button>
+      <button class="toolbar-btn" data-action="italic" title="Italic">
+        ${icon('italic')}
+      </button>
+      <button class="toolbar-btn" data-action="heading" title="Heading">
+        ${icon('heading')}
+      </button>
+      <button class="toolbar-btn" data-action="code" title="Code">
+        ${icon('code')}
+      </button>
+      <button class="toolbar-btn" data-action="link" title="Link">
+        ${icon('link')}
+      </button>
+      <button class="toolbar-btn" data-action="image" title="Image">
+        ${icon('image')}
+      </button>
+      <button class="toolbar-btn" data-action="list" title="List">
+        ${icon('list')}
+      </button>
+      <button class="toolbar-btn" data-action="checklist" title="Task list">
+        ${icon('checklist')}
+      </button>
+      <button class="toolbar-btn" data-action="table" title="Table">
+        ${icon('table')}
+      </button>
+      <button class="toolbar-btn" data-action="quote" title="Quote">
+        ${icon('quote')}
+      </button>
+      <button class="toolbar-btn" data-action="hr" title="Divider">
+        ${icon('hr')}
+      </button>
+      <span class="toolbar-separator" style="height:20px"></span>
+      <button class="toolbar-btn" data-action="beautify" title="Beautify">
+        ${icon('wand')}
+      </button>
+      <button class="toolbar-btn" data-action="import" title="Import">
+        ${icon('upload')}
+      </button>
+      <button class="toolbar-btn" data-action="export-md" title="Export MD">
+        ${icon('download')}
+      </button>
+      <span class="toolbar-separator" style="height:20px"></span>
+      <button class="toolbar-btn" data-action="toggle-editor" title="Toggle editor">
+        ${icon('edit')}
+      </button>
+      <button class="toolbar-btn" data-action="toggle-preview" title="Toggle preview">
+        ${icon('eye')}
+      </button>
+      <button class="toolbar-btn active" data-action="toggle-split" title="Split view">
+        ${icon('columns')}
+      </button>
+      <button class="toolbar-btn active" data-action="toggle-sync" title="Sync scroll">
+        ${icon('sync')}
+      </button>
     </div>
 
     <span class="toolbar-spacer"></span>
@@ -91,8 +141,7 @@ export function createToolbar(): HTMLElement {
   buildThemeMenu(el);
 
   on('sync-scroll-changed', (val: unknown) => {
-    const btn = el.querySelector('[data-action="toggle-sync"]');
-    btn?.classList.toggle('active', val as boolean);
+    el.querySelectorAll('[data-action="toggle-sync"]').forEach(b => b.classList.toggle('active', val as boolean));
   });
 
   on('layout-changed', () => updateLayoutButtons(el));
@@ -133,10 +182,10 @@ function buildThemeMenu(toolbar: HTMLElement): void {
 
 function updateLayoutButtons(toolbar: HTMLElement): void {
   const state = getState();
-  toolbar.querySelector('[data-action="toggle-editor"]')?.classList.toggle('active', state.showEditor);
-  toolbar.querySelector('[data-action="toggle-preview"]')?.classList.toggle('active', state.showPreview);
+  toolbar.querySelectorAll('[data-action="toggle-editor"]').forEach(b => b.classList.toggle('active', state.showEditor));
+  toolbar.querySelectorAll('[data-action="toggle-preview"]').forEach(b => b.classList.toggle('active', state.showPreview));
   const split = state.showEditor && state.showPreview;
-  toolbar.querySelector('[data-action="toggle-split"]')?.classList.toggle('active', split);
+  toolbar.querySelectorAll('[data-action="toggle-split"]').forEach(b => b.classList.toggle('active', split));
 }
 
 function setupToolbarEvents(toolbar: HTMLElement): void {
@@ -169,6 +218,9 @@ function setupToolbarEvents(toolbar: HTMLElement): void {
         break;
       case 'export-toggle':
         toggleDropdown(toolbar.querySelector('#export-menu')!);
+        break;
+      case 'export-md':
+        emit('export', 'md');
         break;
       case 'toggle-sync':
         toggleSyncScroll();
