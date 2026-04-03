@@ -39,5 +39,17 @@ export interface UserProfile {
   provider: 'github' | 'google';
 }
 
+// ─── Feedback ───
+export interface FeedbackData {
+  name: string;
+  email: string;
+  rating: number; // 1-5
+  message: string;
+  userId?: string | null;
+  createdAt: number;
+  userAgent: string;
+  url: string;
+}
+
 // ─── Events ───
 export type EventCallback<T = unknown> = (data: T) => void;
