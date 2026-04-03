@@ -2,12 +2,15 @@ import { initializeApp, type FirebaseApp } from 'firebase/app';
 import {
   getAuth,
   signInWithPopup,
+  signInWithRedirect,
+  getRedirectResult,
   signOut as fbSignOut,
   onAuthStateChanged,
   GithubAuthProvider,
   GoogleAuthProvider,
   type Auth,
   type User,
+  type AuthError,
 } from 'firebase/auth';
 import {
   getFirestore,
@@ -50,32 +53,48 @@ export function initFirebase(): void {
         emit('auth-changed', null);
       }
     });
+
+    // Handle redirect results (for mobile fallback)
+    getRedirectResult(auth).catch((e) => {
+      if (e && (e as AuthError).code !== 'auth/no-redirect-result') {
+        console.warn('Redirect auth result error:', e);
+      }
+    });
   } catch (e) {
     console.warn('Firebase init failed:', e);
   }
 }
 
-export async function signInWithGitHub(): Promise<void> {
+async function signInWithProvider(provider: GithubAuthProvider | GoogleAuthProvider): Promise<void> {
   if (!auth) return;
   try {
-    const provider = new GithubAuthProvider();
-    provider.addScope('read:user');
     await signInWithPopup(auth, provider);
   } catch (e) {
-    console.error('GitHub sign-in failed:', e);
+    const err = e as AuthError;
+    // Fallback to redirect if popup is blocked or unavailable
+    if (err.code === 'auth/popup-blocked' ||
+        err.code === 'auth/popup-closed-by-user' ||
+        err.code === 'auth/cancelled-popup-request') {
+      console.info('Popup blocked, falling back to redirect auth');
+      await signInWithRedirect(auth!, provider);
+      return;
+    }
+    // Ignore user-initiated cancellations
+    if (err.code === 'auth/user-cancelled') return;
+    console.error('Sign-in failed:', err.code, err.message);
     throw e;
   }
 }
 
+export async function signInWithGitHub(): Promise<void> {
+  const provider = new GithubAuthProvider();
+  provider.addScope('read:user');
+  await signInWithProvider(provider);
+}
+
 export async function signInWithGoogle(): Promise<void> {
-  if (!auth) return;
-  try {
-    const provider = new GoogleAuthProvider();
-    await signInWithPopup(auth, provider);
-  } catch (e) {
-    console.error('Google sign-in failed:', e);
-    throw e;
-  }
+  const provider = new GoogleAuthProvider();
+  await signInWithProvider(provider);
 }
 
 export async function signOut(): Promise<void> {
