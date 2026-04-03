@@ -16,6 +16,36 @@ export function createTabBar(): HTMLElement {
   return el;
 }
 
+function startInlineRename(tabId: string, nameSpan: HTMLElement): void {
+  if (nameSpan.querySelector('input')) return; // already editing
+
+  const currentName = nameSpan.textContent || '';
+  const input = document.createElement('input');
+  input.type = 'text';
+  input.value = currentName;
+  input.className = 'tab-rename-input';
+  nameSpan.textContent = '';
+  nameSpan.appendChild(input);
+  input.focus();
+  input.select();
+
+  const finish = (cancel = false) => {
+    const val = cancel ? currentName : (input.value.trim() || currentName);
+    updateTabName(tabId, val);
+    // render() will be called via tab-renamed event
+  };
+
+  input.addEventListener('blur', () => finish(false));
+  input.addEventListener('keydown', (ke) => {
+    ke.stopPropagation();
+    if (ke.key === 'Enter') { input.blur(); }
+    if (ke.key === 'Escape') { finish(true); input.blur(); }
+  });
+  // Prevent click on input from switching tabs
+  input.addEventListener('click', (e) => e.stopPropagation());
+  input.addEventListener('dblclick', (e) => e.stopPropagation());
+}
+
 function render(container: HTMLElement): void {
   const state = getState();
   container.innerHTML = '';
@@ -49,27 +79,29 @@ function render(container: HTMLElement): void {
 
     tabEl.addEventListener('click', () => switchTab(tab.id));
 
+    // Desktop: double-click to rename
     tabEl.addEventListener('dblclick', (e) => {
       e.preventDefault();
-      const input = document.createElement('input');
-      input.type = 'text';
-      input.value = tab.name;
-      input.style.cssText = 'width:100px;height:20px;font-size:12px;border:1px solid var(--border-active);background:var(--bg-input);color:var(--text-primary);padding:0 4px;border-radius:2px;outline:none;';
-      nameSpan.replaceWith(input);
-      input.focus();
-      input.select();
-      const finish = () => {
-        const val = input.value.trim() || tab.name;
-        updateTabName(tab.id, val);
-        input.replaceWith(nameSpan);
-        nameSpan.textContent = val;
-      };
-      input.addEventListener('blur', finish);
-      input.addEventListener('keydown', (ke) => {
-        if (ke.key === 'Enter') finish();
-        if (ke.key === 'Escape') { input.replaceWith(nameSpan); }
-      });
+      e.stopPropagation();
+      // Re-query live DOM — click may have triggered a re-render via switchTab
+      const liveNameSpan = container.querySelector(`[data-tab-id="${tab.id}"] .tab-name`) as HTMLElement | null;
+      if (liveNameSpan) startInlineRename(tab.id, liveNameSpan);
     });
+
+    // Mobile: long-tap (600ms) to rename
+    let longTapTimer: ReturnType<typeof setTimeout> | null = null;
+    tabEl.addEventListener('touchstart', () => {
+      longTapTimer = setTimeout(() => {
+        longTapTimer = null;
+        const liveNameSpan = container.querySelector(`[data-tab-id="${tab.id}"] .tab-name`) as HTMLElement | null;
+        if (liveNameSpan) startInlineRename(tab.id, liveNameSpan);
+      }, 600);
+    }, { passive: true });
+    const cancelLongTap = () => {
+      if (longTapTimer) { clearTimeout(longTapTimer); longTapTimer = null; }
+    };
+    tabEl.addEventListener('touchend', cancelLongTap, { passive: true });
+    tabEl.addEventListener('touchmove', cancelLongTap, { passive: true });
 
     container.appendChild(tabEl);
   }
@@ -97,3 +129,4 @@ function updateDirty(container: HTMLElement): void {
     }
   }
 }
+
