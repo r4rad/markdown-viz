@@ -1,6 +1,6 @@
 import { icon } from './icons';
 import { themes, applyTheme } from '../themes/themes';
-import { getState, setTheme, toggleSyncScroll, togglePreview, toggleEditor } from '../lib/state';
+import { getState, setTheme, toggleSyncScroll, togglePreview, toggleEditor, updateTabName, getActiveTab } from '../lib/state';
 import { emit, on } from '../lib/events';
 import {
   signInWithGitHub,
@@ -13,6 +13,7 @@ import {
   getCloudFiles,
 } from '../lib/auth';
 import { restoreState } from '../lib/state';
+import { openFeedbackModal } from './FeedbackModal';
 import type { UserProfile } from '../types';
 
 let overlayEl: HTMLElement | null = null;
@@ -208,6 +209,33 @@ function renderPanelContent(): void {
 
   // ─── File Section ───
   const fileSection = createSection('File');
+
+  // Rename current tab
+  const activeTab = getActiveTab();
+  if (activeTab) {
+    const renameRow = document.createElement('div');
+    renameRow.className = 'settings-rename-row';
+    const renameInput = document.createElement('input');
+    renameInput.type = 'text';
+    renameInput.value = activeTab.name;
+    renameInput.className = 'settings-rename-input';
+    renameInput.placeholder = 'Tab name…';
+    const renameBtn = document.createElement('button');
+    renameBtn.className = 'settings-action-btn';
+    renameBtn.innerHTML = `${icon('rename')}<span>Rename</span>`;
+    renameBtn.addEventListener('click', () => {
+      const val = renameInput.value.trim();
+      if (val && val !== activeTab.name) {
+        updateTabName(activeTab.id, val);
+      }
+    });
+    renameInput.addEventListener('keydown', (ke) => {
+      if (ke.key === 'Enter') renameBtn.click();
+    });
+    renameRow.append(renameInput, renameBtn);
+    fileSection.appendChild(renameRow);
+  }
+
   const fileGrid = document.createElement('div');
   fileGrid.className = 'settings-btn-grid';
   const fileActions = [
@@ -288,6 +316,18 @@ function renderPanelContent(): void {
   }
   themeSection.appendChild(darkGrid);
   content.appendChild(themeSection);
+
+  // ─── Feedback ───
+  const feedbackSection = createSection('Feedback');
+  const feedbackBtn = document.createElement('button');
+  feedbackBtn.className = 'settings-action-btn wide';
+  feedbackBtn.innerHTML = `${icon('chat')}<span>Send Feedback</span>`;
+  feedbackBtn.addEventListener('click', () => {
+    closeSettingsMenu();
+    openFeedbackModal();
+  });
+  feedbackSection.appendChild(feedbackBtn);
+  content.appendChild(feedbackSection);
 }
 
 async function loadCloudFilesList(container: HTMLElement): Promise<void> {
