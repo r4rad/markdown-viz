@@ -10,5 +10,11 @@ service cloud.firestore {
         allow read, write: if request.auth != null && request.auth.uid == userId;
       }
     }
+
+    // Feedback collection: anyone can submit (anonymous or logged-in)
+    match /feedback/{docId} {
+      allow create: if true;
+      allow read, update, delete: if false;
+    }
   }
 }
