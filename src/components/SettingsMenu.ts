@@ -133,7 +133,7 @@ function renderPanelContent(): void {
 
       const banner = document.createElement('div');
       banner.className = 'space-banner';
-      banner.innerHTML = `<span class="badge">BETA</span> Your current plan supports up to <strong>5 documents</strong> in the cloud.`;
+      banner.innerHTML = `<span class="badge">BETA</span> Your current plan supports up to <strong>10 documents</strong> in the cloud.`;
       spaceSection.appendChild(banner);
 
       // Load and show cloud files

@@ -119,7 +119,7 @@ export function isFirebaseReady(): boolean {
 
 export function getMaxSyncTabs(): number {
   const fromEnv = Number(import.meta.env.VITE_MAX_SYNC_TABS);
-  return (Number.isFinite(fromEnv) && fromEnv > 0) ? fromEnv : 5;
+  return (Number.isFinite(fromEnv) && fromEnv > 0) ? fromEnv : 10;
 }
 
 export async function syncToCloud(state: AppState): Promise<boolean> {

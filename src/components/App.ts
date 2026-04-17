@@ -254,7 +254,7 @@ function createBetaBanner(): HTMLElement {
 
   banner.innerHTML = `
     <span>🚧 <strong>Beta</strong> — work is always saved locally.
-    Sign in to sync up to <strong>5 documents</strong> across your devices for free.</span>
+    Sign in to sync up to <strong>10 documents</strong> across your devices for free.</span>
     <div class="beta-banner-actions">
       <button class="beta-banner-link beta-signin-btn">Sign in</button>
       <button class="beta-banner-dismiss" title="Dismiss">×</button>
