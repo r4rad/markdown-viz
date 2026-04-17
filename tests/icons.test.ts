@@ -26,7 +26,8 @@ describe('Icons', () => {
         'logo', 'plus', 'x', 'bold', 'italic', 'code', 'link', 'image',
         'list', 'table', 'eye', 'edit', 'columns', 'sync', 'download',
         'upload', 'wand', 'palette', 'user', 'github', 'google', 'gear',
-        'heading', 'quote', 'hr', 'checklist',
+        'heading', 'quote', 'hr', 'checklist', 'cloud-sync', 'share',
+        'copy', 'cursor', 'scroll-link',
       ];
       for (const name of requiredIcons) {
         const result = icon(name);

@@ -219,3 +219,127 @@ describe('E2E: Layout Toggle Consistency', () => {
     expect(getState().showEditor || getState().showPreview).toBe(true);
   });
 });
+
+describe('E2E: Exclusive Layout Modes', () => {
+  it('should support editor-only mode', () => {
+    // Start from split
+    if (!getState().showEditor) toggleEditor();
+    if (!getState().showPreview) togglePreview();
+
+    // Switch to editor-only: hide preview
+    togglePreview();
+    expect(getState().showEditor).toBe(true);
+    expect(getState().showPreview).toBe(false);
+  });
+
+  it('should support preview-only mode', () => {
+    if (!getState().showEditor) toggleEditor();
+    if (!getState().showPreview) togglePreview();
+
+    // Switch to preview-only: hide editor
+    toggleEditor();
+    expect(getState().showEditor).toBe(false);
+    expect(getState().showPreview).toBe(true);
+  });
+
+  it('should support split mode (both visible)', () => {
+    if (!getState().showEditor) toggleEditor();
+    if (!getState().showPreview) togglePreview();
+
+    expect(getState().showEditor).toBe(true);
+    expect(getState().showPreview).toBe(true);
+  });
+
+  it('layout-changed event should fire on mode switches', () => {
+    const cb = vi.fn();
+    const unsub = on('layout-changed', cb);
+    if (!getState().showEditor) toggleEditor();
+    if (!getState().showPreview) togglePreview();
+    toggleEditor(); // → preview only
+    expect(cb).toHaveBeenCalled();
+    unsub();
+    // Restore
+    toggleEditor();
+  });
+});
+
+describe('E2E: Copy Editor Content', () => {
+  it('copy-editor event should be emittable', () => {
+    const cb = vi.fn();
+    const unsub = on('copy-editor', cb);
+    emit('copy-editor');
+    expect(cb).toHaveBeenCalled();
+    unsub();
+  });
+});
+
+describe('E2E: Preview Mode Toggle', () => {
+  it('preview-mode-changed event should be emittable', () => {
+    const cb = vi.fn();
+    const unsub = on('preview-mode-changed', cb);
+    emit('preview-mode-changed', true);
+    expect(cb).toHaveBeenCalledWith(true);
+    unsub();
+  });
+
+  it('preview-mode-changed false means view mode', () => {
+    const cb = vi.fn();
+    const unsub = on('preview-mode-changed', cb);
+    emit('preview-mode-changed', false);
+    expect(cb).toHaveBeenCalledWith(false);
+    unsub();
+  });
+});
+
+describe('E2E: Bidirectional Scroll Events', () => {
+  it('preview-scroll event should be emittable', () => {
+    const cb = vi.fn();
+    const unsub = on('preview-scroll', cb);
+    emit('preview-scroll', 0.5);
+    expect(cb).toHaveBeenCalledWith(0.5);
+    unsub();
+  });
+
+  it('editor-scroll event should be emittable', () => {
+    const cb = vi.fn();
+    const unsub = on('editor-scroll', cb);
+    emit('editor-scroll', 0.75);
+    expect(cb).toHaveBeenCalledWith(0.75);
+    unsub();
+  });
+});
+
+describe('E2E: New Icons Exist', () => {
+  it('copy icon should exist and contain SVG', () => {
+    expect(icon('copy')).toContain('svg');
+  });
+
+  it('cursor icon should exist and contain SVG', () => {
+    expect(icon('cursor')).toContain('svg');
+  });
+
+  it('scroll-link icon should exist and contain SVG', () => {
+    expect(icon('scroll-link')).toContain('svg');
+  });
+});
+
+describe('E2E: HTML-to-Markdown Diagram Round-Trip', () => {
+  it('should preserve mermaid diagram through WYSIWYG cycle', () => {
+    const originalMd = '```mermaid\ngraph TD\n    A-->B\n```';
+    // Simulate what Preview.ts renders for mermaid
+    const renderedHtml = `<div class="diagram-container" data-diagram="mermaid" data-source="${encodeURIComponent('graph TD\n    A-->B')}"><pre class="mermaid-rendered"><svg>rendered</svg></pre></div>`;
+    const roundTripped = htmlToMarkdown(renderedHtml);
+    expect(roundTripped).toContain('```mermaid');
+    expect(roundTripped).toContain('graph TD');
+    expect(roundTripped).toContain('A-->B');
+  });
+
+  it('should preserve mixed content with diagrams and text', () => {
+    const html = `<h1>Title</h1><p>Some text</p><div class="diagram-container" data-diagram="mermaid" data-source="${encodeURIComponent('graph LR\nA-->B')}"><pre class="mermaid-rendered"><svg>svg</svg></pre></div><p>More text</p>`;
+    const md = htmlToMarkdown(html);
+    expect(md).toContain('# Title');
+    expect(md).toContain('Some text');
+    expect(md).toContain('```mermaid');
+    expect(md).toContain('More text');
+  });
+});
