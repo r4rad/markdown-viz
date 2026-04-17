@@ -10,7 +10,7 @@ import { on, emit } from '../lib/events';
 import { loadState, debouncedSave } from '../lib/storage';
 import { applyTheme, getSavedTheme } from '../themes/themes';
 import { setupImport, openFilePicker } from '../lib/import';
-import { exportMarkdown, exportHTML, exportPDF } from '../lib/export';
+import { exportMarkdown, exportHTML, exportPDF, exportDOCX } from '../lib/export';
 import { beautifyMarkdown } from '../lib/beautifier';
 import { initFirebase, syncToCloud, updateCloudFileName, isAuthenticated } from '../lib/auth';
 import { initAuthUI } from './AuthUI';
@@ -69,6 +69,7 @@ export async function initApp(): Promise<void> {
       case 'md': exportMarkdown(); break;
       case 'html': exportHTML(); break;
       case 'pdf': exportPDF(); break;
+      case 'docx': exportDOCX(); break;
     }
   });
 

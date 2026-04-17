@@ -76,8 +76,40 @@ export async function exportPDF(): Promise<void> {
   }
 }
 
+export async function exportDOCX(): Promise<void> {
+  const preview = getPreviewElement();
+  const tab = getActiveTab();
+  if (!preview || !tab) return;
+
+  try {
+    const { asBlob } = await import('html-docx-js-typescript');
+
+    const htmlContent = `<!DOCTYPE html>
+<html><head><meta charset="UTF-8">
+<style>
+  body { font-family: 'Calibri', sans-serif; font-size: 11pt; line-height: 1.5; }
+  h1 { font-size: 20pt; } h2 { font-size: 16pt; } h3 { font-size: 14pt; }
+  pre { background: #f6f8fa; padding: 8px; font-family: Consolas, monospace; font-size: 10pt; }
+  code { font-family: Consolas, monospace; font-size: 10pt; }
+  table { border-collapse: collapse; } th, td { border: 1px solid #999; padding: 4px 8px; }
+  blockquote { border-left: 3px solid #ccc; margin: 0; padding: 0 12px; color: #555; }
+</style></head><body>${preview.innerHTML}</body></html>`;
+
+    const blob = await asBlob(htmlContent) as Blob;
+    const name = tab.name.replace(/\.[^.]+$/, '') + '.docx';
+    downloadBlob(blob, name);
+  } catch (err) {
+    console.error('DOCX export failed:', err);
+    alert(`DOCX export failed: ${err}`);
+  }
+}
+
 function downloadFile(content: string, name: string, type: string): void {
   const blob = new Blob([content], { type });
+  downloadBlob(blob, name);
+}
+
+function downloadBlob(blob: Blob, name: string): void {
   const a = document.createElement('a');
   a.href = URL.createObjectURL(blob);
   a.download = name;

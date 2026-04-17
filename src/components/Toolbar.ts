@@ -109,6 +109,7 @@ export function createToolbar(): HTMLElement {
           <button class="dropdown-item" data-export="md">📄 Markdown (.md)</button>
           <button class="dropdown-item" data-export="html">🌐 HTML (.html)</button>
           <button class="dropdown-item" data-export="pdf">📑 PDF (.pdf)</button>
+          <button class="dropdown-item" data-export="docx">📝 Word (.docx)</button>
         </div>
       </div>
     </div>

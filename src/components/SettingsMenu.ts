@@ -243,6 +243,7 @@ function renderPanelContent(): void {
     { label: 'Export MD', ico: 'download', fn: () => { emit('export', 'md'); closeSettingsMenu(); } },
     { label: 'Export HTML', ico: 'download', fn: () => { emit('export', 'html'); closeSettingsMenu(); } },
     { label: 'Export PDF', ico: 'download', fn: () => { emit('export', 'pdf'); closeSettingsMenu(); } },
+    { label: 'Export DOCX', ico: 'download', fn: () => { emit('export', 'docx'); closeSettingsMenu(); } },
     { label: 'Beautify', ico: 'wand', fn: () => { emit('beautify'); closeSettingsMenu(); } },
   ];
   for (const f of fileActions) {

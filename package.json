@@ -38,6 +38,7 @@
     "dompurify": "^3.3.3",
     "firebase": "^12.11.0",
     "highlight.js": "^11.11.1",
+    "html-docx-js-typescript": "^0.1.5",
     "html2canvas": "^1.4.1",
     "idb-keyval": "^6.2.2",
     "jspdf": "^4.2.1",
