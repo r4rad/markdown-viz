@@ -3,6 +3,7 @@ import { themes, applyTheme } from '../themes/themes';
 import { getState, setTheme, addTab, toggleSyncScroll, togglePreview, toggleEditor } from '../lib/state';
 import { emit, on } from '../lib/events';
 import { openSettingsMenu } from './SettingsMenu';
+import { isSharingEnabled } from '../lib/share';
 
 export function createToolbar(): HTMLElement {
   const el = document.createElement('div');
@@ -139,6 +140,12 @@ export function createToolbar(): HTMLElement {
     </div>
 
     <div class="toolbar-group">
+      <button class="toolbar-btn" data-action="share" id="share-btn" title="Share document" style="display:none">
+        ${icon('share')}<span class="btn-label desktop-only">Share</span>
+      </button>
+    </div>
+
+    <div class="toolbar-group">
       <button class="toolbar-btn settings-btn" data-action="open-settings" title="Settings">${icon('gear')}</button>
     </div>
   `;
@@ -152,10 +159,12 @@ export function createToolbar(): HTMLElement {
 
   on('layout-changed', () => updateLayoutButtons(el));
 
-  // Show/hide cloud-sync button based on auth state
+  // Show/hide cloud-sync and share buttons based on auth state
   on('auth-changed', (profile: unknown) => {
-    const btn = el.querySelector('#cloud-sync-btn') as HTMLElement | null;
-    if (btn) btn.style.display = profile ? '' : 'none';
+    const syncBtn = el.querySelector('#cloud-sync-btn') as HTMLElement | null;
+    if (syncBtn) syncBtn.style.display = profile ? '' : 'none';
+    const shareBtn = el.querySelector('#share-btn') as HTMLElement | null;
+    if (shareBtn) shareBtn.style.display = (profile && isSharingEnabled()) ? '' : 'none';
   });
 
   return el;
@@ -253,6 +262,9 @@ function setupToolbarEvents(toolbar: HTMLElement): void {
       }
       case 'cloud-sync':
         emit('cloud-sync-request');
+        break;
+      case 'share':
+        emit('share-request');
         break;
       case 'import':
         emit('import-file');

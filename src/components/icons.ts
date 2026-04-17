@@ -33,6 +33,7 @@ const ICONS: Record<string, string> = {
   star: `<svg viewBox="0 0 16 16" fill="currentColor"><path d="M8 1l1.5 4H14l-3.5 2.5 1.3 4L8 9 4.2 11.5l1.3-4L2 5h4.5z"/></svg>`,
   chat: `<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3"><path d="M14 2H2a1 1 0 0 0-1 1v8a1 1 0 0 0 1 1h3l2 2.5L9 12h5a1 1 0 0 0 1-1V3a1 1 0 0 0-1-1z"/></svg>`,
   rename: `<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3"><path d="M11 2l3 3-8 8H3v-3z"/><path d="M9 4l3 3"/></svg>`,
+  share: `<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3"><circle cx="12" cy="3" r="2"/><circle cx="4" cy="8" r="2"/><circle cx="12" cy="13" r="2"/><line x1="5.8" y1="7" x2="10.2" y2="4"/><line x1="5.8" y1="9" x2="10.2" y2="12"/></svg>`,
 };
 
 export function icon(name: string, cls = ''): string {

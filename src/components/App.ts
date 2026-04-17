@@ -5,7 +5,7 @@ import { createPreview } from './Preview';
 import { createStatusBar } from './StatusBar';
 import { initDiagramModal } from './DiagramModal';
 import { initSettingsMenu, openSettingsMenu } from './SettingsMenu';
-import { getState, addTab, restoreState, toggleEditor, togglePreview } from '../lib/state';
+import { getState, addTab, restoreState, toggleEditor, togglePreview, getActiveTab } from '../lib/state';
 import { on, emit } from '../lib/events';
 import { loadState, debouncedSave } from '../lib/storage';
 import { applyTheme, getSavedTheme } from '../themes/themes';
@@ -14,6 +14,7 @@ import { exportMarkdown, exportHTML, exportPDF } from '../lib/export';
 import { beautifyMarkdown } from '../lib/beautifier';
 import { initFirebase, syncToCloud, updateCloudFileName, isAuthenticated } from '../lib/auth';
 import { initAuthUI } from './AuthUI';
+import { shareDocument, loadSharedDocument, getShareIdFromURL, buildShareURL, triggerSystemShare, isSharingEnabled } from '../lib/share';
 import type { UserProfile } from '../types';
 
 export async function initApp(): Promise<void> {
@@ -52,6 +53,9 @@ export async function initApp(): Promise<void> {
   initAuthUI();
   setupAutoSync();
 
+  // Check if we arrived via a shared document URL
+  await loadSharedDocFromURL();
+
   // Wire up events
   on('import-file', () => openFilePicker());
 
@@ -72,6 +76,9 @@ export async function initApp(): Promise<void> {
 
   // Cloud sync button + Ctrl+S
   on('cloud-sync-request', () => triggerCloudSync());
+
+  // Share button
+  on('share-request', () => handleShareRequest());
 
   // Rename cloud file when tab is renamed
   on('tab-renamed', (data: unknown) => {
@@ -277,4 +284,35 @@ function createBetaBanner(): HTMLElement {
   });
 
   return banner;
+}
+
+async function handleShareRequest(): Promise<void> {
+  if (!isSharingEnabled() || !isAuthenticated()) return;
+  const tab = getActiveTab();
+  if (!tab) return;
+
+  const btn = document.getElementById('share-btn');
+  if (btn) btn.classList.add('sharing');
+
+  const docId = await shareDocument(tab);
+  if (docId) {
+    const url = buildShareURL(docId);
+    await triggerSystemShare(url, tab.name);
+  }
+
+  if (btn) {
+    btn.classList.remove('sharing');
+  }
+}
+
+async function loadSharedDocFromURL(): Promise<void> {
+  const shareId = getShareIdFromURL(window.location.href);
+  if (!shareId) return;
+
+  const doc = await loadSharedDocument(shareId);
+  if (doc) {
+    addTab(doc.name, doc.content);
+  }
+  // Clean URL without reload
+  window.history.replaceState(null, '', '/');
 }
