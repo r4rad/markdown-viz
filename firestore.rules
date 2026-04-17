@@ -11,6 +11,15 @@ service cloud.firestore {
       }
     }
 
+    // Shared documents: anyone can read, only the owner can write/update/delete
+    match /sharedDocs/{docId} {
+      allow read: if true;
+      allow create: if request.auth != null
+                    && request.resource.data.ownerId == request.auth.uid;
+      allow update, delete: if request.auth != null
+                            && resource.data.ownerId == request.auth.uid;
+    }
+
     // Feedback collection: anyone can submit (anonymous or logged-in)
     match /feedback/{docId} {
       allow create: if true;
