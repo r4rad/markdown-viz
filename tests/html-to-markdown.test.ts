@@ -90,4 +90,57 @@ describe('htmlToMarkdown', () => {
     const md = htmlToMarkdown('<p>A</p><p>B</p><p>C</p>');
     expect(md).not.toMatch(/\n{4,}/);
   });
+
+  // Diagram container round-trip tests
+  it('should reconstruct mermaid code blocks from diagram containers', () => {
+    const source = 'graph TD\n    A-->B';
+    const html = `<div class="diagram-container" data-diagram="mermaid" data-source="${encodeURIComponent(source)}"><pre class="mermaid-rendered"><svg>...</svg></pre></div>`;
+    const md = htmlToMarkdown(html);
+    expect(md).toContain('```mermaid');
+    expect(md).toContain('graph TD');
+    expect(md).toContain('A-->B');
+    expect(md).toContain('```');
+  });
+
+  it('should reconstruct graphviz code blocks from diagram containers', () => {
+    const source = 'digraph { A -> B }';
+    const html = `<div class="diagram-container" data-diagram="graphviz" data-source="${encodeURIComponent(source)}"><pre class="graphviz-rendered"><svg>...</svg></pre></div>`;
+    const md = htmlToMarkdown(html);
+    expect(md).toContain('```dot');
+    expect(md).toContain('digraph { A -> B }');
+  });
+
+  it('should reconstruct nomnoml code blocks from diagram containers', () => {
+    const source = '[Foo]->[Bar]';
+    const html = `<div class="diagram-container" data-diagram="nomnoml" data-source="${encodeURIComponent(source)}"><pre><svg>...</svg></pre></div>`;
+    const md = htmlToMarkdown(html);
+    expect(md).toContain('```nomnoml');
+    expect(md).toContain('[Foo]->[Bar]');
+  });
+
+  it('should preserve code blocks with language class', () => {
+    const html = '<pre><code class="language-javascript">const x = 1;</code></pre>';
+    const md = htmlToMarkdown(html);
+    expect(md).toContain('```javascript');
+    expect(md).toContain('const x = 1;');
+  });
+
+  it('should preserve code blocks without language', () => {
+    const html = '<pre><code>plain code</code></pre>';
+    const md = htmlToMarkdown(html);
+    expect(md).toContain('```');
+    expect(md).toContain('plain code');
+  });
+
+  it('should preserve images with all attributes', () => {
+    const html = '<img src="https://example.com/img.png" alt="My Image">';
+    const md = htmlToMarkdown(html);
+    expect(md).toBe('![My Image](https://example.com/img.png)');
+  });
+
+  it('should preserve links with nested formatting', () => {
+    const html = '<a href="https://example.com"><strong>Bold Link</strong></a>';
+    const md = htmlToMarkdown(html);
+    expect(md).toContain('[**Bold Link**](https://example.com)');
+  });
 });

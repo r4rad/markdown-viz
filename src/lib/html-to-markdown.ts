@@ -16,6 +16,13 @@ export function htmlToMarkdown(html: string): string {
     const tag = el.tagName.toLowerCase();
     const children = () => Array.from(el.childNodes).map(walk).join('');
 
+    // Diagram containers: reconstruct code blocks from data-source
+    if (el.classList?.contains('diagram-container') && el.dataset?.source && el.dataset?.diagram) {
+      const source = decodeURIComponent(el.dataset.source);
+      const lang = el.dataset.diagram === 'graphviz' ? 'dot' : el.dataset.diagram;
+      return `\n\`\`\`${lang}\n${source}\n\`\`\`\n\n`;
+    }
+
     switch (tag) {
       case 'h1': return `# ${children()}\n\n`;
       case 'h2': return `## ${children()}\n\n`;
@@ -34,7 +41,15 @@ export function htmlToMarkdown(html: string): string {
       case 'del':
       case 'strike': return `~~${children()}~~`;
       case 'code': return `\`${children()}\``;
-      case 'pre': return `\n\`\`\`\n${el.textContent || ''}\n\`\`\`\n\n`;
+      case 'pre': {
+        const codeEl = el.querySelector('code');
+        if (codeEl) {
+          const langMatch = codeEl.className.match(/language-(\S+)/);
+          const lang = langMatch ? langMatch[1] : '';
+          return `\n\`\`\`${lang}\n${codeEl.textContent || ''}\n\`\`\`\n\n`;
+        }
+        return `\n\`\`\`\n${el.textContent || ''}\n\`\`\`\n\n`;
+      }
       case 'blockquote': return children().split('\n').map(l => `> ${l}`).join('\n') + '\n\n';
       case 'a': {
         const href = el.getAttribute('href') || '';
@@ -69,6 +84,8 @@ export function htmlToMarkdown(html: string): string {
       case 'hr': return '\n---\n\n';
       case 'sup': return `<sup>${children()}</sup>`;
       case 'sub': return `<sub>${children()}</sub>`;
+      // Skip SVG elements entirely
+      case 'svg': return '';
       case 'div': return children();
       default: return children();
     }
