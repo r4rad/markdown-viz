@@ -15,6 +15,7 @@ import type { FileTab } from '../types';
 let view: EditorView | null = null;
 let editorContainer: HTMLElement | null = null;
 let ignoreNextUpdate = false;
+let ignoreEditorScroll = false;
 
 function createEditorTheme(): Extension {
   return EditorView.theme({
@@ -176,7 +177,7 @@ function getExtensions(): Extension[] {
     }),
     EditorView.domEventHandlers({
       scroll: (_, v) => {
-        if (getState().syncScroll) {
+        if (getState().syncScroll && !ignoreEditorScroll) {
           const scrollInfo = v.scrollDOM;
           const ratio = scrollInfo.scrollTop / (scrollInfo.scrollHeight - scrollInfo.clientHeight || 1);
           emit('editor-scroll', ratio);
@@ -222,6 +223,15 @@ export function createEditor(): HTMLElement {
 
   on('layout-changed', () => {
     requestAnimationFrame(() => view?.requestMeasure());
+  });
+
+  // Bidirectional sync: scroll editor when preview scrolls
+  on('preview-scroll', (ratio: unknown) => {
+    if (!view || !getState().syncScroll) return;
+    ignoreEditorScroll = true;
+    const sd = view.scrollDOM;
+    sd.scrollTop = (ratio as number) * (sd.scrollHeight - sd.clientHeight);
+    requestAnimationFrame(() => { ignoreEditorScroll = false; });
   });
 
   return editorContainer;
