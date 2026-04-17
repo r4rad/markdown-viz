@@ -75,6 +75,12 @@ export async function initApp(): Promise<void> {
 
   on('beautify', () => beautifyMarkdown());
 
+  // Copy editor content to clipboard
+  on('copy-editor', () => {
+    const tab = getActiveTab();
+    if (tab) navigator.clipboard.writeText(tab.content).catch(console.error);
+  });
+
   // Cloud sync button + Ctrl+S
   on('cloud-sync-request', () => triggerCloudSync());
 

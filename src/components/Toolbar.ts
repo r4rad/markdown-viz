@@ -4,6 +4,7 @@ import { getState, setTheme, addTab, toggleSyncScroll, togglePreview, toggleEdit
 import { emit, on } from '../lib/events';
 import { openSettingsMenu } from './SettingsMenu';
 import { isSharingEnabled } from '../lib/share';
+import { setPreviewEditable, isPreviewEditable } from './Preview';
 
 export function createToolbar(): HTMLElement {
   const el = document.createElement('div');
@@ -85,17 +86,17 @@ export function createToolbar(): HTMLElement {
         ${icon('download')}
       </button>
       <span class="toolbar-separator" style="height:20px"></span>
-      <button class="toolbar-btn" data-action="toggle-editor" title="Toggle editor">
+      <button class="toolbar-btn active" data-action="show-editor" title="Editor only">
         ${icon('edit')}
       </button>
-      <button class="toolbar-btn" data-action="toggle-preview" title="Toggle preview">
+      <button class="toolbar-btn" data-action="show-preview" title="Preview only">
         ${icon('eye')}
       </button>
-      <button class="toolbar-btn active" data-action="toggle-split" title="Split view">
+      <button class="toolbar-btn active" data-action="show-split" title="Split view">
         ${icon('columns')}
       </button>
       <button class="toolbar-btn active" data-action="toggle-sync" title="Sync scroll">
-        ${icon('sync')}
+        ${icon('scroll-link')}
       </button>
     </div>
 
@@ -116,11 +117,19 @@ export function createToolbar(): HTMLElement {
 
     <span class="toolbar-separator desktop-only"></span>
 
+    <div class="toolbar-group toolbar-layout-group desktop-only">
+      <button class="toolbar-btn active" data-action="show-editor" title="Editor only">${icon('edit')}</button>
+      <button class="toolbar-btn" data-action="show-preview" title="Preview only">${icon('eye')}</button>
+      <button class="toolbar-btn active" data-action="show-split" title="Split view">${icon('columns')}</button>
+      <span class="toolbar-separator" style="height:20px;margin:0 2px"></span>
+      <button class="toolbar-btn" data-action="toggle-preview-edit" title="Edit in preview" id="preview-edit-btn">${icon('cursor')}</button>
+      <button class="toolbar-btn active" data-action="toggle-sync" title="Sync scroll">${icon('scroll-link')}</button>
+    </div>
+
+    <span class="toolbar-separator desktop-only"></span>
+
     <div class="toolbar-group desktop-only">
-      <button class="toolbar-btn" data-action="toggle-editor" title="Toggle editor">${icon('edit')}</button>
-      <button class="toolbar-btn" data-action="toggle-preview" title="Toggle preview">${icon('eye')}</button>
-      <button class="toolbar-btn active" data-action="toggle-split" title="Split view">${icon('columns')}</button>
-      <button class="toolbar-btn active" data-action="toggle-sync" title="Sync scroll">${icon('sync')}</button>
+      <button class="toolbar-btn" data-action="copy-editor" title="Copy markdown">${icon('copy')}</button>
     </div>
 
     <span class="toolbar-separator desktop-only"></span>
@@ -131,8 +140,6 @@ export function createToolbar(): HTMLElement {
         <div class="dropdown-menu" id="theme-menu"></div>
       </div>
     </div>
-
-    <div class="toolbar-group" id="auth-area"></div>
 
     <div class="toolbar-group">
       <button class="toolbar-btn sync-cloud-btn" data-action="cloud-sync" id="cloud-sync-btn" title="Sync to cloud (Ctrl+S)" style="display:none">
@@ -146,6 +153,8 @@ export function createToolbar(): HTMLElement {
       </button>
     </div>
 
+    <div class="toolbar-group" id="auth-area"></div>
+
     <div class="toolbar-group">
       <button class="toolbar-btn settings-btn" data-action="open-settings" title="Settings">${icon('gear')}</button>
     </div>
@@ -153,12 +162,17 @@ export function createToolbar(): HTMLElement {
 
   setupToolbarEvents(el);
   buildThemeMenu(el);
+  updateLayoutButtons(el);
 
   on('sync-scroll-changed', (val: unknown) => {
     el.querySelectorAll('[data-action="toggle-sync"]').forEach(b => b.classList.toggle('active', val as boolean));
   });
 
   on('layout-changed', () => updateLayoutButtons(el));
+
+  on('preview-mode-changed', (editable: unknown) => {
+    el.querySelectorAll('[data-action="toggle-preview-edit"]').forEach(b => b.classList.toggle('active', editable as boolean));
+  });
 
   // Show/hide cloud-sync and share buttons based on auth state
   on('auth-changed', (profile: unknown) => {
@@ -204,10 +218,12 @@ function buildThemeMenu(toolbar: HTMLElement): void {
 
 function updateLayoutButtons(toolbar: HTMLElement): void {
   const state = getState();
-  toolbar.querySelectorAll('[data-action="toggle-editor"]').forEach(b => b.classList.toggle('active', state.showEditor));
-  toolbar.querySelectorAll('[data-action="toggle-preview"]').forEach(b => b.classList.toggle('active', state.showPreview));
+  const editorOnly = state.showEditor && !state.showPreview;
+  const previewOnly = !state.showEditor && state.showPreview;
   const split = state.showEditor && state.showPreview;
-  toolbar.querySelectorAll('[data-action="toggle-split"]').forEach(b => b.classList.toggle('active', split));
+  toolbar.querySelectorAll('[data-action="show-editor"]').forEach(b => b.classList.toggle('active', editorOnly));
+  toolbar.querySelectorAll('[data-action="show-preview"]').forEach(b => b.classList.toggle('active', previewOnly));
+  toolbar.querySelectorAll('[data-action="show-split"]').forEach(b => b.classList.toggle('active', split));
 }
 
 function setupToolbarEvents(toolbar: HTMLElement): void {
@@ -247,20 +263,33 @@ function setupToolbarEvents(toolbar: HTMLElement): void {
       case 'toggle-sync':
         toggleSyncScroll();
         break;
-      case 'toggle-preview':
-        togglePreview();
-        break;
-      case 'toggle-editor':
-        toggleEditor();
-        break;
-      case 'toggle-split': {
-        const s = getState();
-        if (!s.showEditor || !s.showPreview) {
-          if (!s.showEditor) toggleEditor();
-          if (!s.showPreview) togglePreview();
-        }
+      case 'show-preview': {
+        // Show preview only
+        const s1 = getState();
+        if (s1.showEditor) toggleEditor();
+        if (!s1.showPreview) togglePreview();
         break;
       }
+      case 'show-editor': {
+        // Show editor only
+        const s2 = getState();
+        if (!s2.showEditor) toggleEditor();
+        if (s2.showPreview) togglePreview();
+        break;
+      }
+      case 'show-split': {
+        // Show both
+        const s3 = getState();
+        if (!s3.showEditor) toggleEditor();
+        if (!s3.showPreview) togglePreview();
+        break;
+      }
+      case 'toggle-preview-edit':
+        setPreviewEditable(!isPreviewEditable());
+        break;
+      case 'copy-editor':
+        emit('copy-editor');
+        break;
       case 'cloud-sync':
         emit('cloud-sync-request');
         break;
