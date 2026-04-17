@@ -29,7 +29,11 @@ vi.mock('../src/lib/state', () => ({
 vi.mock('../src/components/Preview', () => {
   const el = document.createElement('div');
   el.innerHTML = '<h1>Hello</h1><p>World</p>';
-  return { getPreviewElement: () => el };
+  return {
+    getPreviewElement: () => el,
+    setPreviewEditable: vi.fn(),
+    isPreviewEditable: vi.fn(() => false),
+  };
 });
 
 describe('Export DOCX', () => {

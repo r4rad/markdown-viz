@@ -5,12 +5,30 @@
   line-height: 1.6;
   word-wrap: break-word;
   color: var(--text-primary);
-  outline: none;
-  cursor: text;
 }
 
-.markdown-body:focus {
+/* View mode: normal cursor */
+.markdown-body:not(.preview-editable) {
+  cursor: default;
+}
+
+/* Edit mode: text cursor and subtle border */
+.markdown-body.preview-editable {
+  cursor: text;
   outline: none;
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 30%, transparent);
+}
+
+.markdown-body.preview-editable:focus {
+  outline: none;
+  box-shadow: inset 0 0 0 2px color-mix(in srgb, var(--accent) 50%, transparent);
+}
+
+/* Non-editable blocks within edit mode */
+.markdown-body [contenteditable="false"] {
+  cursor: default;
+  user-select: none;
+  opacity: 0.95;
 }
 
 .markdown-body > *:first-child { margin-top: 0; }

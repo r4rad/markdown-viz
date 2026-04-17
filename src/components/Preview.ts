@@ -7,6 +7,7 @@ import { htmlToMarkdown } from '../lib/html-to-markdown';
 let previewEl: HTMLElement;
 let contentEl: HTMLElement;
 let renderTimer: ReturnType<typeof setTimeout> | null = null;
+let previewEditable = false;
 const headingSlugCounts = new Map<string, number>();
 let highlightModule: typeof import('highlight.js') | null = null;
 let katexModule: typeof import('katex') | null = null;
@@ -368,12 +369,15 @@ async function renderContent(mdContent: string): Promise<void> {
 
   contentEl.innerHTML = html;
 
+  // Protect diagrams, math, and code blocks from WYSIWYG editing
+  protectNonEditableElements();
+
   // Post-render: diagrams and syntax highlighting (async, non-blocking)
   requestAnimationFrame(() => {
     highlightCodeBlocks();
-    renderMermaidDiagrams();
-    renderGraphvizDiagrams();
-    renderNomnomlDiagrams();
+    renderMermaidDiagrams().then(protectNonEditableElements);
+    renderGraphvizDiagrams().then(protectNonEditableElements);
+    renderNomnomlDiagrams().then(protectNonEditableElements);
   });
 }
 
@@ -385,6 +389,28 @@ function scheduleRender(): void {
   }, RENDER_DELAY);
 }
 
+function protectNonEditableElements(): void {
+  if (!contentEl) return;
+  const selectors = '.diagram-container, .math-block, .math-inline, pre';
+  contentEl.querySelectorAll(selectors).forEach(el => {
+    (el as HTMLElement).setAttribute('contenteditable', 'false');
+  });
+}
+
+export function setPreviewEditable(editable: boolean): void {
+  previewEditable = editable;
+  if (contentEl) {
+    contentEl.setAttribute('contenteditable', editable ? 'true' : 'false');
+    contentEl.classList.toggle('preview-editable', editable);
+    if (editable) protectNonEditableElements();
+  }
+  emit('preview-mode-changed', editable);
+}
+
+export function isPreviewEditable(): boolean {
+  return previewEditable;
+}
+
 export function createPreview(): HTMLElement {
   previewEl = document.createElement('div');
   previewEl.className = 'preview-pane';
@@ -392,16 +418,16 @@ export function createPreview(): HTMLElement {
 
   contentEl = document.createElement('div');
   contentEl.className = 'preview-content markdown-body';
-  contentEl.setAttribute('contenteditable', 'true');
-  contentEl.setAttribute('spellcheck', 'true');
+  contentEl.setAttribute('contenteditable', 'false');
   previewEl.appendChild(contentEl);
 
   configureMarked();
 
-  // WYSIWYG: convert HTML edits back to markdown
+  // WYSIWYG: convert HTML edits back to markdown (only in edit mode)
   let wysiwygTimer: ReturnType<typeof setTimeout> | null = null;
   let ignoreNextRender = false;
   contentEl.addEventListener('input', () => {
+    if (!previewEditable) return;
     if (wysiwygTimer) clearTimeout(wysiwygTimer);
     wysiwygTimer = setTimeout(() => {
       const tab = getActiveTab();
@@ -426,16 +452,24 @@ export function createPreview(): HTMLElement {
     }
   });
 
-  // Handle scroll sync from editor
+  // Bidirectional scroll sync
+  let ignorePreviewScroll = false;
   contentEl.addEventListener('scroll', () => {
     const tab = getActiveTab();
     if (tab) setPreviewScroll(tab.id, contentEl.scrollTop);
+    if (!getState().syncScroll || ignorePreviewScroll) return;
+    const scrollHeight = contentEl.scrollHeight - contentEl.clientHeight;
+    if (scrollHeight > 0) {
+      emit('preview-scroll', contentEl.scrollTop / scrollHeight);
+    }
   });
 
   on('editor-scroll', (ratio: unknown) => {
     if (!getState().syncScroll) return;
+    ignorePreviewScroll = true;
     const r = ratio as number;
     contentEl.scrollTop = r * (contentEl.scrollHeight - contentEl.clientHeight);
+    requestAnimationFrame(() => { ignorePreviewScroll = false; });
   });
 
   // Render on content change (skip if WYSIWYG was the source)
