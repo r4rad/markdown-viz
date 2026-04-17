@@ -1,7 +1,8 @@
 import { marked } from 'marked';
 import DOMPurify from 'dompurify';
-import { getActiveTab, getState, setPreviewScroll } from '../lib/state';
+import { getActiveTab, getState, setPreviewScroll, updateTabContent } from '../lib/state';
 import { on, emit } from '../lib/events';
+import { htmlToMarkdown } from '../lib/html-to-markdown';
 
 let previewEl: HTMLElement;
 let contentEl: HTMLElement;
@@ -391,9 +392,26 @@ export function createPreview(): HTMLElement {
 
   contentEl = document.createElement('div');
   contentEl.className = 'preview-content markdown-body';
+  contentEl.setAttribute('contenteditable', 'true');
+  contentEl.setAttribute('spellcheck', 'true');
   previewEl.appendChild(contentEl);
 
   configureMarked();
+
+  // WYSIWYG: convert HTML edits back to markdown
+  let wysiwygTimer: ReturnType<typeof setTimeout> | null = null;
+  let ignoreNextRender = false;
+  contentEl.addEventListener('input', () => {
+    if (wysiwygTimer) clearTimeout(wysiwygTimer);
+    wysiwygTimer = setTimeout(() => {
+      const tab = getActiveTab();
+      if (!tab) return;
+      const md = htmlToMarkdown(contentEl.innerHTML);
+      ignoreNextRender = true;
+      updateTabContent(tab.id, md);
+      emit('set-editor-content', md);
+    }, 400);
+  });
 
   // Handle anchor link clicks for TOC navigation
   contentEl.addEventListener('click', (e) => {
@@ -420,10 +438,13 @@ export function createPreview(): HTMLElement {
     contentEl.scrollTop = r * (contentEl.scrollHeight - contentEl.clientHeight);
   });
 
-  // Render on content change
-  on('content-changed', () => scheduleRender());
-  on('active-tab-changed', () => scheduleRender());
-  on('state-restored', () => scheduleRender());
+  // Render on content change (skip if WYSIWYG was the source)
+  on('content-changed', () => {
+    if (ignoreNextRender) { ignoreNextRender = false; return; }
+    scheduleRender();
+  });
+  on('active-tab-changed', () => { ignoreNextRender = false; scheduleRender(); });
+  on('state-restored', () => { ignoreNextRender = false; scheduleRender(); });
 
   // Re-init mermaid on theme change
   on('theme-changed', () => {

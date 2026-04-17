@@ -5,6 +5,12 @@
   line-height: 1.6;
   word-wrap: break-word;
   color: var(--text-primary);
+  outline: none;
+  cursor: text;
+}
+
+.markdown-body:focus {
+  outline: none;
 }
 
 .markdown-body > *:first-child { margin-top: 0; }
