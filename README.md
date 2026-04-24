@@ -172,13 +172,19 @@ The included `firestore.rules` enforces user-scoped access:
 
 ### Optional: Groq API key for AI audio summaries
 
-Sign up at [console.groq.com](https://console.groq.com/keys) for a free API key (no credit card required — 30 requests/min, 14,400/day on the free tier). Once you have a key:
+Sign up at [console.groq.com](https://console.groq.com/keys) for a free API key (no credit card required — 30 req/min, 14,400/day). Two ways to configure it:
 
+**Option A — env var (recommended for self-hosting):** Add to `.env.local` (never commit this file):
+```env
+VITE_GROQ_API_KEY=gsk_your_key_here
+```
+The app reads it at startup — no manual UI entry needed.
+
+**Option B — runtime (for any deployment):**
 1. Open the app → **Settings → AI Audio (Groq)**
-2. Paste your key (starts with `gsk_`)
-3. Click **Save**
+2. Paste your key and click **Save**
 
-The key is stored in `localStorage` (client-side only, never sent to our servers). With a key set, every Play request will generate a human-quality spoken narrative via `llama-3.1-8b-instant` instead of the extractive fallback.
+`localStorage` always takes precedence over the env var, so both can coexist.
 
 ### Optional: EmailJS for feedback email delivery
 
@@ -205,12 +211,14 @@ All variables are optional. Copy `.env.example` to `.env.local` and override wha
 | `VITE_FIREBASE_STORAGE_BUCKET` | — | Firebase storage bucket |
 | `VITE_FIREBASE_MESSAGING_SENDER_ID` | — | Firebase messaging sender ID |
 | `VITE_FIREBASE_APP_ID` | — | Firebase app ID |
+| `VITE_GROQ_API_KEY` | — | Groq API key for AI audio (free tier at console.groq.com) |
 | `VITE_MAX_SYNC_TABS` | `5` | Max documents synced per user account |
 | `VITE_AUTO_SYNC_INTERVAL_SECONDS` | `60` | Auto-sync interval for signed-in users (seconds) |
 | `VITE_EMAILJS_SERVICE_ID` | — | EmailJS service ID (feedback email) |
 | `VITE_EMAILJS_TEMPLATE_ID` | — | EmailJS template ID (feedback email) |
 | `VITE_EMAILJS_PUBLIC_KEY` | — | EmailJS public key |
 | `VITE_FEEDBACK_EMAIL` | `rad.rafatahmad@gmail.com` | Recipient address for feedback emails |
+| `VITE_ENABLE_SHARING` | `true` | Enable/disable document sharing via URL |
 
 ---
 
@@ -279,6 +287,31 @@ firebase.json       # Firebase hosting + firestore config
 .env.example        # All supported environment variables with comments
 agentrefdocs/       # Developer reference docs and sample Markdown (gitignored)
 ```
+
+---
+
+## 🔍 SEO & AEO
+
+The `index.html` is optimized for search engine ranking on these key terms:
+
+| Target term | Strategy |
+|-------------|---------|
+| `online markdown editor` | Title tag, h1 in noscript, meta description |
+| `mermaid diagram editor` | FAQ schema + noscript feature list |
+| `graphviz editor online` | FAQ schema + noscript + keywords meta |
+| `markdown writing tool` | FAQ schema, description, noscript copy |
+| `markdown to pdf` | FAQ schema: "How do I convert Markdown to PDF?" |
+| `diagram tool` | SoftwareApplication featureList, noscript comparison |
+| `graph editor` | noscript comparison vs draw.io/Lucidchart/Visio |
+| `real-time collaboration markdown` | FAQ schema, feature list |
+
+**Structured data schemas included:**
+- `SoftwareApplication` — 20-item featureList, applicationCategory array, offers, aggregateRating
+- `WebApplication` — broad matching
+- `FAQPage` — 12 Q&A entries (AEO for AI search engines: ChatGPT, Perplexity, Gemini, etc.)
+- `HowTo` — "How to create a Mermaid diagram in MarkdownViz"
+
+**`<noscript>` section** provides fully crawlable HTML content (h1, h2, ul) for crawlers that don't execute JavaScript, ensuring Googlebot and Bing see the full feature list even for this SPA.
 
 ---
 
