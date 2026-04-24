@@ -33,76 +33,96 @@ vi.mock('firebase/auth', () => ({
 
 // ─── Tests ───
 
-describe('generateAudioScript()', () => {
-  it('strips bold markdown syntax', async () => {
+describe('generateAudioScript() - summarized narrative', () => {
+  it('opens with document title', async () => {
     const { generateAudioScript } = await import('../src/lib/audio');
-    const result = generateAudioScript('This is **bold** text');
-    expect(result).toContain('bold');
+    const md = '# Architecture Guide\nThis guide explains the system design for new engineers.';
+    const result = generateAudioScript(md);
+    expect(result).toMatch(/^Architecture Guide/);
+    expect(result).toContain('system design');
+  });
+
+  it('provides section overview for multi-section documents', async () => {
+    const { generateAudioScript } = await import('../src/lib/audio');
+    const md = '# My Doc\nIntro.\n\n## Setup\nInstallation steps.\n\n## Usage\nHow to use.\n\n## Troubleshooting\nCommon issues.';
+    const result = generateAudioScript(md);
+    expect(result).toContain('Setup');
+    expect(result).toContain('Usage');
+    expect(result).toContain('Troubleshooting');
+    expect(result.toLowerCase()).toMatch(/covers|sections/);
+  });
+
+  it('summarizes each section to its first sentence, not full content', async () => {
+    const { generateAudioScript } = await import('../src/lib/audio');
+    const md = '# API Docs\n\n## Authentication\nAll requests require a Bearer token. Tokens expire after 24 hours. Refresh tokens are available via the refresh endpoint.';
+    const result = generateAudioScript(md);
+    expect(result).toContain('Authentication');
+    expect(result).toContain('Bearer token');
+  });
+
+  it('produces output shorter than a verbose multi-section input', async () => {
+    const { generateAudioScript } = await import('../src/lib/audio');
+    const section = (n: number) =>
+      `## Section ${n}\nThis is the content of section ${n} with many details.\n` +
+      Array.from({ length: 8 }, (_, i) => `- Detailed item ${i + 1} with explanation`).join('\n');
+    const md =
+      '# Long Document\nThis document covers many topics in depth.\n\n' +
+      Array.from({ length: 6 }, (_, i) => section(i + 1)).join('\n\n');
+    const outputWords = generateAudioScript(md).split(/\s+/).length;
+    const inputWords = md.split(/\s+/).length;
+    expect(outputWords).toBeLessThan(inputWords);
+    expect(outputWords).toBeLessThanOrEqual(400);
+  });
+
+  it('strips all markdown formatting characters from output', async () => {
+    const { generateAudioScript } = await import('../src/lib/audio');
+    const md = '# Title\n## Section\n**bold** and *italic* and `code` and ~~strike~~';
+    const result = generateAudioScript(md);
     expect(result).not.toContain('**');
-  });
-
-  it('strips italic syntax', async () => {
-    const { generateAudioScript } = await import('../src/lib/audio');
-    const result = generateAudioScript('This is *italic* text');
-    expect(result).not.toContain('*italic*');
-    expect(result).toContain('italic');
-  });
-
-  it('converts h1 to spoken heading', async () => {
-    const { generateAudioScript } = await import('../src/lib/audio');
-    const result = generateAudioScript('# My Title');
-    expect(result).toContain('My Title');
+    expect(result).not.toContain('~~');
+    expect(result).not.toContain('`code`');
     expect(result).not.toContain('# ');
-  });
-
-  it('converts h2 to spoken section', async () => {
-    const { generateAudioScript } = await import('../src/lib/audio');
-    const result = generateAudioScript('## Section Name');
-    expect(result).toContain('Section Name');
     expect(result).not.toContain('## ');
   });
 
-  it('describes a mermaid code block', async () => {
+  it('does not read code inside code blocks', async () => {
     const { generateAudioScript } = await import('../src/lib/audio');
-    const md = '```mermaid\ngraph TD\n    A[Start] --> B[End]\n```';
+    const md = '## Example\n```javascript\nconsole.log("hello");\nreturn 42;\n```';
     const result = generateAudioScript(md);
-    expect(result.toLowerCase()).toContain('diagram');
+    expect(result).not.toContain('console.log');
+    expect(result).not.toContain('return 42');
+    expect(result.toLowerCase()).toMatch(/javascript|code/);
+  });
+
+  it('describes mermaid diagrams in natural language', async () => {
+    const { generateAudioScript } = await import('../src/lib/audio');
+    const md = '# API\n## Flow\n```mermaid\nsequenceDiagram\n    Client->>Server: Request\n    Server-->>Client: Response\n```';
+    const result = generateAudioScript(md);
+    expect(result.toLowerCase()).toContain('sequence');
     expect(result).not.toContain('```');
   });
 
-  it('describes a generic code block with language', async () => {
+  it('summarizes long bullet lists without reading each item', async () => {
     const { generateAudioScript } = await import('../src/lib/audio');
-    const md = '```javascript\nconsole.log("hello");\n```';
+    const md = '## Features\n' + Array.from({ length: 8 }, (_, i) => `- Feature ${i + 1}`).join('\n');
     const result = generateAudioScript(md);
-    expect(result.toLowerCase()).toContain('javascript');
-    expect(result).not.toContain('```');
-    expect(result).not.toContain('console.log');
+    expect(result).not.toMatch(/- Feature/);
+    expect(result.toLowerCase()).toMatch(/items|features|covers/);
+  });
+
+  it('handles plain paragraphs with no headings', async () => {
+    const { generateAudioScript } = await import('../src/lib/audio');
+    const md = 'This document explains the basics. It covers three topics. You will learn the fundamentals.';
+    const result = generateAudioScript(md);
+    expect(result.length).toBeGreaterThan(0);
+    expect(result).not.toContain('#');
+    expect(result).not.toContain('*');
   });
 
   it('handles empty content', async () => {
     const { generateAudioScript } = await import('../src/lib/audio');
-    const result = generateAudioScript('');
-    expect(typeof result).toBe('string');
-  });
-
-  it('summarizes bullet lists longer than 5 items', async () => {
-    const { generateAudioScript } = await import('../src/lib/audio');
-    const md = `- Item 1\n- Item 2\n- Item 3\n- Item 4\n- Item 5\n- Item 6\n- Item 7`;
-    const result = generateAudioScript(md);
-    expect(result).toContain('more');
-  });
-
-  it('strips inline backtick code', async () => {
-    const { generateAudioScript } = await import('../src/lib/audio');
-    const result = generateAudioScript('Call the `doSomething()` function');
-    expect(result).not.toContain('`');
-    expect(result).toContain('doSomething');
-  });
-
-  it('strips strikethrough', async () => {
-    const { generateAudioScript } = await import('../src/lib/audio');
-    const result = generateAudioScript('~~old text~~');
-    expect(result).not.toContain('~~');
+    expect(generateAudioScript('')).toBe('');
+    expect(generateAudioScript('   ')).toBe('');
   });
 });
 
