@@ -61,110 +61,232 @@ export function describeDiagram(lang: string, code: string): string {
     return 'Mermaid diagram.';
   }
 
-  // generic fallback for graphviz, nomnoml, plantuml, etc.
   return `${lang} diagram.`;
 }
 
-// ─── Script generation ────────────────────────────────────────────────────────
+// ─── Inline markdown cleaner ──────────────────────────────────────────────────
+
+function cleanInline(text: string): string {
+  return text
+    .replace(/!\[([^\]]*)\]\([^)]*\)/g, (_, alt) => (alt ? alt : ''))
+    .replace(/\[([^\]]+)\]\([^)]*\)/g, '$1')
+    .replace(/~~([^~]+)~~/g, '$1')
+    .replace(/\*\*([^*]+)\*\*/g, '$1')
+    .replace(/__([^_]+)__/g, '$1')
+    .replace(/\*([^*]+)\*/g, '$1')
+    .replace(/_([^_]+)_/g, '$1')
+    .replace(/`([^`]+)`/g, '$1')
+    .trim();
+}
+
+// Extract first meaningful sentence. Avoids splitting on abbreviations and
+// version numbers by requiring the next character after . to be uppercase or end.
+function firstSentence(text: string): string {
+  const t = cleanInline(text.trim());
+  // Sentence ends at ./?/! not followed immediately by a lowercase letter or digit
+  const m = t.match(/^.+?[.!?](?!\s*[a-z0-9])/);
+  if (m) return m[0].trim();
+  if (t.length <= 160) return t;
+  const cut = t.lastIndexOf(' ', 160);
+  return t.slice(0, cut > 0 ? cut : 160) + '.';
+}
+
+// ─── Document structure ───────────────────────────────────────────────────────
+
+interface DiagramBlock { lang: string; code: string; }
+
+interface DocSection {
+  heading: string;
+  level: number;
+  content: string;
+  bullets: string[];
+  diagrams: DiagramBlock[];
+  codeBlocks: string[];
+}
+
+interface ParsedDoc {
+  title: string;
+  intro: string;
+  rootBullets: string[];
+  rootDiagrams: DiagramBlock[];
+  rootCodeBlocks: string[];
+  sections: DocSection[];
+}
+
+function parseDocument(content: string): ParsedDoc {
+  const lines = content.split('\n');
+  let title = '';
+  let intro = '';
+  const rootBullets: string[] = [];
+  const rootDiagrams: DiagramBlock[] = [];
+  const rootCodeBlocks: string[] = [];
+  const sections: DocSection[] = [];
+  let current: DocSection | null = null;
+  let inFence = false;
+  let fenceLang = '';
+  const fenceLines: string[] = [];
+
+  const flushFence = () => {
+    const code = fenceLines.join('\n');
+    const isDiagram = /^(mermaid|graphviz|plantuml|nomnoml|flowchart)$/i.test(fenceLang);
+    if (isDiagram) {
+      (current ? current.diagrams : rootDiagrams).push({ lang: fenceLang, code });
+    } else {
+      (current ? current.codeBlocks : rootCodeBlocks).push(fenceLang || 'code');
+    }
+    fenceLines.length = 0;
+    fenceLang = '';
+  };
+
+  for (const line of lines) {
+    if (line.match(/^```/)) {
+      if (inFence) { flushFence(); inFence = false; }
+      else { fenceLang = line.slice(3).trim(); inFence = true; }
+      continue;
+    }
+    if (inFence) { fenceLines.push(line); continue; }
+
+    if (!line.trim() || /^[-*_]{3,}$/.test(line.trim()) || /^<!--/.test(line)) continue;
+
+    const h1 = line.match(/^# (.+)/);
+    if (h1) { if (!title) title = cleanInline(h1[1]); continue; }
+
+    const hN = line.match(/^(#{2,6}) (.+)/);
+    if (hN) {
+      current = {
+        heading: cleanInline(hN[2].trim()),
+        level: hN[1].length,
+        content: '',
+        bullets: [],
+        diagrams: [],
+        codeBlocks: [],
+      };
+      sections.push(current);
+      continue;
+    }
+
+    // Task list and regular bullets/numbered
+    const bulletMatch =
+      line.match(/^[-*+]\s+\[[ xX]\]\s+(.+)/) ||
+      line.match(/^[-*+]\s+(.+)/) ||
+      line.match(/^\d+\.\s+(.+)/);
+    if (bulletMatch) {
+      const item = cleanInline(bulletMatch[1]);
+      if (current) current.bullets.push(item);
+      else rootBullets.push(item);
+      continue;
+    }
+
+    const bq = line.match(/^>\s*(.*)/);
+    const textLine = cleanInline(bq ? bq[1] : line);
+    if (!textLine) continue;
+
+    if (!current) intro += (intro ? ' ' : '') + textLine;
+    else current.content += (current.content ? ' ' : '') + textLine;
+  }
+
+  return { title, intro, rootBullets, rootDiagrams, rootCodeBlocks, sections };
+}
+
+// ─── Section content summarizer ───────────────────────────────────────────────
+
+function summarizeBullets(bullets: string[]): string {
+  if (!bullets.length) return '';
+  if (bullets.length === 1) return `This includes ${bullets[0]}.`;
+  if (bullets.length <= 3) return `This covers ${bullets.join(', ')}.`;
+  if (bullets.length <= 7) {
+    return `This covers ${bullets.length} items including ${bullets.slice(0, 3).join(', ')}, and more.`;
+  }
+  return `This covers ${bullets.length} items.`;
+}
+
+function sectionNarrative(section: DocSection): string {
+  const parts: string[] = [];
+
+  if (section.content) {
+    const sentence = firstSentence(section.content);
+    if (sentence) parts.push(sentence);
+  }
+
+  if (section.bullets.length) {
+    parts.push(summarizeBullets(section.bullets));
+  }
+
+  for (const d of section.diagrams) {
+    parts.push(describeDiagram(d.lang, d.code));
+  }
+
+  if (section.codeBlocks.length === 1) {
+    parts.push(`There is a ${section.codeBlocks[0]} code example.`);
+  } else if (section.codeBlocks.length > 1) {
+    parts.push(`There are ${section.codeBlocks.length} code examples.`);
+  }
+
+  return parts.join(' ');
+}
+
+// ─── Main script generator ────────────────────────────────────────────────────
 
 export function generateAudioScript(content: string): string {
   if (!content.trim()) return '';
 
-  const lines = content.split('\n');
-  const output: string[] = [];
-  let i = 0;
+  const doc = parseDocument(content);
+  const parts: string[] = [];
 
-  while (i < lines.length) {
-    const line = lines[i];
+  if (doc.title) parts.push(doc.title + '.');
 
-    // Fenced code block
-    const fenceMatch = line.match(/^```(\w*)/);
-    if (fenceMatch) {
-      const lang = fenceMatch[1] || '';
-      const codeLines: string[] = [];
-      i++;
-      while (i < lines.length && !lines[i].startsWith('```')) {
-        codeLines.push(lines[i]);
-        i++;
-      }
-      i++; // skip closing ```
-      const code = codeLines.join('\n');
-      if (lang === 'mermaid' || lang === 'graphviz' || lang === 'nomnoml' || lang === 'plantuml') {
-        output.push(describeDiagram(lang, code));
-      } else {
-        const langLabel = lang ? lang.charAt(0).toUpperCase() + lang.slice(1) : 'Code';
-        output.push(`${langLabel} code block.`);
-      }
-      continue;
-    }
-
-    // Headings
-    const h1 = line.match(/^# (.+)/);
-    if (h1) { output.push(h1[1].trim()); i++; continue; }
-
-    const h2 = line.match(/^## (.+)/);
-    if (h2) { output.push(`Section: ${h2[1].trim()}.`); i++; continue; }
-
-    const h3 = line.match(/^#{3,} (.+)/);
-    if (h3) { output.push(`Sub-section: ${h3[1].trim()}.`); i++; continue; }
-
-    // Bullet list — collect and summarise if long
-    if (/^[-*+] /.test(line)) {
-      const items: string[] = [];
-      while (i < lines.length && /^[-*+] /.test(lines[i])) {
-        items.push(lines[i].replace(/^[-*+] /, '').trim());
-        i++;
-      }
-      if (items.length > 5) {
-        const shown = items.slice(0, 5).join(', ');
-        output.push(`List with ${items.length} items including: ${shown}, and ${items.length - 5} more.`);
-      } else {
-        output.push(items.join('. ') + '.');
-      }
-      continue;
-    }
-
-    // Numbered list
-    if (/^\d+\. /.test(line)) {
-      const items: string[] = [];
-      while (i < lines.length && /^\d+\. /.test(lines[i])) {
-        items.push(lines[i].replace(/^\d+\. /, '').trim());
-        i++;
-      }
-      output.push(items.join('. ') + '.');
-      continue;
-    }
-
-    // Blank line separator — skip
-    if (line.trim() === '') { i++; continue; }
-
-    // Horizontal rule
-    if (/^[-*_]{3,}$/.test(line.trim())) { i++; continue; }
-
-    // Blockquote
-    if (line.startsWith('> ')) {
-      output.push(line.slice(2).trim());
-      i++;
-      continue;
-    }
-
-    // Regular paragraph text — clean formatting marks
-    let text = line;
-    text = text.replace(/!\[([^\]]*)\]\([^)]*\)/g, (_, alt) => alt ? `Image: ${alt}.` : 'Image.');
-    text = text.replace(/\[([^\]]+)\]\([^)]*\)/g, '$1');
-    text = text.replace(/~~([^~]+)~~/g, '$1');
-    text = text.replace(/\*\*([^*]+)\*\*/g, '$1');
-    text = text.replace(/__([^_]+)__/g, '$1');
-    text = text.replace(/\*([^*]+)\*/g, '$1');
-    text = text.replace(/_([^_]+)_/g, '$1');
-    text = text.replace(/`([^`]+)`/g, '$1');
-    text = text.trim();
-
-    if (text) output.push(text);
-    i++;
+  if (doc.intro) {
+    const sentence = firstSentence(doc.intro);
+    if (sentence) parts.push(sentence);
   }
 
-  return output.join(' ');
+  // No sections: handle root-level content
+  if (!doc.sections.length) {
+    if (doc.rootBullets.length) parts.push(summarizeBullets(doc.rootBullets));
+    for (const d of doc.rootDiagrams) parts.push(describeDiagram(d.lang, d.code));
+    if (doc.rootCodeBlocks.length === 1) {
+      parts.push(`There is a ${doc.rootCodeBlocks[0]} code example.`);
+    } else if (doc.rootCodeBlocks.length > 1) {
+      parts.push(`There are ${doc.rootCodeBlocks.length} code examples.`);
+    }
+    if (!parts.length) {
+      // Pure paragraphs with no title or structure
+      const cleaned = cleanInline(content.replace(/```[\s\S]*?```/g, ''));
+      const sentences = cleaned
+        .split(/(?<=[.!?])\s+(?=[A-Z])/)
+        .map(s => s.trim())
+        .filter(s => s.length > 20)
+        .slice(0, 4);
+      return sentences.join(' ');
+    }
+    return parts.join(' ');
+  }
+
+  // Section overview (only when 2+ H2 sections)
+  const h2s = doc.sections.filter(s => s.level === 2);
+  if (h2s.length >= 2) {
+    const names = h2s.map(s => s.heading);
+    const last = names[names.length - 1];
+    const rest = names.slice(0, -1).join(', ');
+    parts.push(`It covers ${rest}, and ${last}.`);
+  }
+
+  // Per-section narrative with hard word cap
+  let wordCount = parts.join(' ').split(/\s+/).length;
+  for (const section of doc.sections) {
+    if (wordCount >= 400) break;
+    const narrative = sectionNarrative(section);
+    const line = narrative
+      ? `${section.heading}: ${narrative}`
+      : `${section.heading}.`;
+    parts.push(line);
+    wordCount += line.split(/\s+/).length;
+  }
+
+  // Root-level diagrams after sections
+  for (const d of doc.rootDiagrams) parts.push(describeDiagram(d.lang, d.code));
+
+  return parts.join(' ');
 }
 
 // ─── Cache helpers ────────────────────────────────────────────────────────────
@@ -199,6 +321,47 @@ export async function saveAudioCache(
   await setDoc(ref, entry);
 }
 
+// ─── Voice selection ──────────────────────────────────────────────────────────
+
+let cachedVoice: SpeechSynthesisVoice | null = null;
+
+export function pickVoice(voices: SpeechSynthesisVoice[]): SpeechSynthesisVoice | null {
+  const english = voices.filter(v => v.lang.startsWith('en'));
+  const pool = english.length ? english : voices;
+
+  const priority: Array<(v: SpeechSynthesisVoice) => boolean> = [
+    v => /Google.*English.*Female/i.test(v.name),
+    v => /Google.*English/i.test(v.name),
+    v => /Microsoft.*(Natural|Neural|Online)/i.test(v.name) && v.lang.startsWith('en'),
+    v => /Microsoft/i.test(v.name) && v.lang.startsWith('en'),
+    v => v.lang === 'en-US',
+    v => v.lang.startsWith('en'),
+  ];
+
+  for (const test of priority) {
+    const match = pool.find(test);
+    if (match) return match;
+  }
+  return pool[0] ?? null;
+}
+
+/** Call once at app startup to trigger browser voice loading. */
+export function preloadVoices(): void {
+  if (typeof window === 'undefined' || !window.speechSynthesis) return;
+  const tryCache = () => {
+    const voices = window.speechSynthesis.getVoices();
+    if (voices.length) { cachedVoice = pickVoice(voices); return true; }
+    return false;
+  };
+  if (!tryCache()) {
+    const handler = () => {
+      tryCache();
+      window.speechSynthesis.removeEventListener('voiceschanged', handler);
+    };
+    window.speechSynthesis.addEventListener('voiceschanged', handler);
+  }
+}
+
 // ─── Playback ─────────────────────────────────────────────────────────────────
 
 export type AudioState = 'playing' | 'paused' | 'stopped';
@@ -215,6 +378,14 @@ export function playAudioScript(
   }
 
   const utterance = new SpeechSynthesisUtterance(script);
+  utterance.rate = 0.92;
+  utterance.pitch = 1.0;
+  utterance.volume = 1.0;
+
+  // Use cached voice, or try picking one right now as fallback
+  const voice = cachedVoice ?? pickVoice(window.speechSynthesis.getVoices());
+  if (voice) utterance.voice = voice;
+
   activeUtterance = utterance;
 
   utterance.onstart = () => onState('playing');
@@ -228,6 +399,11 @@ export function playAudioScript(
   return {
     pause: () => window.speechSynthesis.pause(),
     resume: () => window.speechSynthesis.resume(),
-    stop: () => { window.speechSynthesis.cancel(); activeUtterance = null; onState('stopped'); },
+    stop: () => {
+      window.speechSynthesis.cancel();
+      activeUtterance = null;
+      onState('stopped');
+    },
   };
 }
+

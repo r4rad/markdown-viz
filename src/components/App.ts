@@ -18,7 +18,7 @@ import { initAuthUI } from './AuthUI';
 import { shareDocument, loadSharedDocument, getShareIdFromURL, buildShareURL, triggerSystemShare, isSharingEnabled } from '../lib/share';
 import { computeChecksum, startCollaboration, stopCollaboration, getActiveSession } from '../lib/crdt';
 import { writeSyncLog } from '../lib/sync-log';
-import { generateAudioScript, isCacheValid, loadAudioCache, saveAudioCache, playAudioScript } from '../lib/audio';
+import { generateAudioScript, isCacheValid, loadAudioCache, saveAudioCache, playAudioScript, preloadVoices } from '../lib/audio';
 import type { UserProfile } from '../types';
 
 export async function initApp(): Promise<void> {
@@ -55,6 +55,7 @@ export async function initApp(): Promise<void> {
   setupImport();
   setupKeyboardShortcuts();
   initFirebase();
+  preloadVoices();
   initAuthUI();
   setupAutoSync();
 
