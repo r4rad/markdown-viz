@@ -8,6 +8,16 @@ vi.mock('firebase/app', () => ({
   initializeApp: () => ({}),
 }));
 
+vi.mock('idb-keyval', () => {
+  const store = new Map<string, unknown>();
+  return {
+    get: vi.fn((key: string) => Promise.resolve(store.get(key))),
+    set: vi.fn((key: string, val: unknown) => { store.set(key, val); return Promise.resolve(); }),
+    del: vi.fn((key: string) => { store.delete(key); return Promise.resolve(); }),
+    keys: vi.fn(() => Promise.resolve([...store.keys()])),
+  };
+});
+
 const mockCache: Record<string, any> = {};
 
 vi.mock('firebase/firestore', () => ({
@@ -229,5 +239,53 @@ describe('loadAudioCache() / saveAudioCache()', () => {
     expect(loaded!.script).toBe('narration script here');
     expect(loaded!.checksum).toBe('chk-abc');
     expect(loaded!.generatorVersion).toBe(AUDIO_GENERATOR_VERSION);
+  });
+});
+
+describe('float32ToWav()', () => {
+  it('produces a buffer starting with RIFF and WAVE markers', async () => {
+    const { float32ToWav } = await import('../src/lib/audio');
+    const audio = new Float32Array([0, 0.5, -0.5, 0]);
+    const buf = float32ToWav(audio, 24000);
+    const view = new DataView(buf);
+    expect(String.fromCharCode(view.getUint8(0), view.getUint8(1), view.getUint8(2), view.getUint8(3))).toBe('RIFF');
+    expect(String.fromCharCode(view.getUint8(8), view.getUint8(9), view.getUint8(10), view.getUint8(11))).toBe('WAVE');
+  });
+
+  it('has byte length of 44 + 2 bytes per sample', async () => {
+    const { float32ToWav } = await import('../src/lib/audio');
+    const audio = new Float32Array(100);
+    const buf = float32ToWav(audio, 24000);
+    expect(buf.byteLength).toBe(44 + 100 * 2);
+  });
+
+  it('encodes sample rate correctly at byte 24', async () => {
+    const { float32ToWav } = await import('../src/lib/audio');
+    const audio = new Float32Array(1);
+    const buf = float32ToWav(audio, 22050);
+    expect(new DataView(buf).getUint32(24, true)).toBe(22050);
+  });
+
+  it('clamps out-of-range float32 samples to int16 limits', async () => {
+    const { float32ToWav } = await import('../src/lib/audio');
+    const audio = new Float32Array([2.0, -2.0]);
+    const buf = float32ToWav(audio, 24000);
+    const view = new DataView(buf);
+    expect(view.getInt16(44, true)).toBe(0x7FFF);
+    expect(view.getInt16(46, true)).toBe(-0x8000);
+  });
+});
+
+describe('audioCacheKey()', () => {
+  it('returns a versioned, voice-prefixed key containing the checksum', async () => {
+    const { audioCacheKey } = await import('../src/lib/audio');
+    const key = audioCacheKey('sha256abc');
+    expect(key).toMatch(/^tts-v\d+/);
+    expect(key).toContain('sha256abc');
+  });
+
+  it('produces different keys for different checksums', async () => {
+    const { audioCacheKey } = await import('../src/lib/audio');
+    expect(audioCacheKey('aaa')).not.toBe(audioCacheKey('bbb'));
   });
 });
