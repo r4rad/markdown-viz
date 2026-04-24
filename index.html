@@ -3,8 +3,110 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <meta name="description" content="MarkdownViz — Lightweight Markdown editor, viewer & beautifier with diagram support" />
-  <title>MarkdownViz</title>
+
+  <!-- Primary Meta -->
+  <title>MarkdownViz — Markdown Editor, Visualizer & Diagrams</title>
+  <meta name="description" content="MarkdownViz is a free, real-time Markdown editor with live preview, diagram rendering (Mermaid, Graphviz, Cytoscape), AI audio summaries, collaborative editing (CRDT), and export to PDF, HTML, and DOCX." />
+  <meta name="keywords" content="markdown editor, markdown visualizer, mermaid diagrams, graphviz, live markdown preview, real-time collaboration, CRDT, audio summary, text to speech, markdown to PDF, markdown to HTML" />
+  <meta name="author" content="r4rad" />
+  <meta name="robots" content="index, follow" />
+  <link rel="canonical" href="https://markdown-viz.web.app/" />
+
+  <!-- Open Graph -->
+  <meta property="og:type" content="website" />
+  <meta property="og:url" content="https://markdown-viz.web.app/" />
+  <meta property="og:title" content="MarkdownViz — Markdown Editor, Visualizer & Diagrams" />
+  <meta property="og:description" content="Real-time Markdown editor with live diagram rendering, AI-powered audio summaries, collaborative editing, and exports to PDF, HTML, and DOCX." />
+  <meta property="og:image" content="https://markdown-viz.web.app/og-image.png" />
+  <meta property="og:site_name" content="MarkdownViz" />
+
+  <!-- Twitter Card -->
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:title" content="MarkdownViz — Markdown Editor, Visualizer & Diagrams" />
+  <meta name="twitter:description" content="Real-time Markdown editor with live diagram rendering, AI-powered audio summaries, collaborative editing, and exports to PDF, HTML, and DOCX." />
+  <meta name="twitter:image" content="https://markdown-viz.web.app/og-image.png" />
+
+  <!-- Structured Data: WebApplication -->
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "WebApplication",
+    "name": "MarkdownViz",
+    "url": "https://markdown-viz.web.app/",
+    "description": "Free real-time Markdown editor with live preview, diagram rendering, AI audio summaries, collaborative editing, and multi-format export.",
+    "applicationCategory": "DeveloperApplication",
+    "operatingSystem": "Any",
+    "offers": {
+      "@type": "Offer",
+      "price": "0",
+      "priceCurrency": "USD"
+    },
+    "featureList": [
+      "Real-time Markdown editing with live preview",
+      "Diagram rendering: Mermaid, Graphviz, Cytoscape, KaTeX",
+      "AI-powered audio summaries via Groq LLM",
+      "Collaborative editing with CRDT sync",
+      "Export to PDF, HTML, DOCX, Markdown",
+      "Multiple themes (light and dark)",
+      "Cloud sync and document sharing"
+    ],
+    "author": {
+      "@type": "Person",
+      "name": "r4rad"
+    }
+  }
+  </script>
+
+  <!-- Structured Data: FAQPage (AEO) -->
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "FAQPage",
+    "mainEntity": [
+      {
+        "@type": "Question",
+        "name": "What is MarkdownViz?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "MarkdownViz is a free, browser-based Markdown editor with real-time preview, support for diagrams (Mermaid, Graphviz, Cytoscape, KaTeX), AI-powered audio summaries, collaborative editing using CRDTs, and export to PDF, HTML, DOCX, and Markdown."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "Does MarkdownViz support diagrams?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "Yes. MarkdownViz renders Mermaid flowcharts, sequence diagrams, Gantt charts, Graphviz graphs, Cytoscape network diagrams, and KaTeX math formulas directly in the live preview."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "Can I listen to my document as audio?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "Yes. MarkdownViz features an AI audio summary powered by Groq's LLM (llama-3.1-8b-instant). It generates a concise, human-quality spoken narrative of your document — no robotic text-to-speech. The audio is cached and regenerated only when the document changes."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "Does MarkdownViz support real-time collaboration?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "Yes. MarkdownViz uses CRDT (Conflict-free Replicated Data Types) for real-time collaborative editing. Changes sync instantly across users, with a tamper-evident sync log recording who changed what and when, including checksums."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "Can I export my Markdown document?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "Yes. MarkdownViz supports export to PDF, HTML, DOCX, and plain Markdown. You can also share documents via a public URL."
+        }
+      }
+    ]
+  }
+  </script>
+
   <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
 </head>
 <body>

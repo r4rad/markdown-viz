@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://markdown-viz.web.app/sitemap.xml
