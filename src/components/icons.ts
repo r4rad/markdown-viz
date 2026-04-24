@@ -37,6 +37,10 @@ const ICONS: Record<string, string> = {
   copy: `<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3"><rect x="5" y="5" width="9" height="9" rx="1"/><path d="M3 11V3a1 1 0 0 1 1-1h8"/></svg>`,
   cursor: `<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3"><path d="M8 2v12"/><path d="M5 14h6"/><path d="M4 5h8"/></svg>`,
   'scroll-link': `<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3"><rect x="1" y="2" width="5" height="12" rx="1"/><rect x="10" y="2" width="5" height="12" rx="1"/><path d="M6 6h4M6 10h4" stroke-dasharray="1.5 1.5"/><circle cx="3.5" cy="6" r="0.7" fill="currentColor"/><circle cx="12.5" cy="6" r="0.7" fill="currentColor"/></svg>`,
+  play: `<svg viewBox="0 0 16 16" fill="currentColor"><polygon points="4,2 14,8 4,14"/></svg>`,
+  pause: `<svg viewBox="0 0 16 16" fill="currentColor"><rect x="3" y="2" width="4" height="12" rx="1"/><rect x="9" y="2" width="4" height="12" rx="1"/></svg>`,
+  stop: `<svg viewBox="0 0 16 16" fill="currentColor"><rect x="3" y="3" width="10" height="10" rx="1.5"/></svg>`,
+  users: `<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3"><circle cx="6" cy="5" r="2.5"/><path d="M1 13c0-2.5 2-4 5-4s5 1.5 5 4"/><circle cx="11.5" cy="5" r="2"/><path d="M13 10c1.5.5 2.5 1.5 2.5 3"/></svg>`,
 };
 
 export function icon(name: string, cls = ''): string {
