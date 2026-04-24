@@ -19,7 +19,8 @@ Rules:
 - Output ONLY the spoken script — no headings, no bullet points, no markdown.`;
 
 export function getGroqApiKey(): string | null {
-  return localStorage.getItem(GROQ_KEY_STORAGE);
+  // localStorage takes precedence (user-entered via Settings), then build-time env var
+  return localStorage.getItem(GROQ_KEY_STORAGE) || (import.meta.env.VITE_GROQ_API_KEY as string | undefined) || null;
 }
 
 export function setGroqApiKey(key: string): void {
