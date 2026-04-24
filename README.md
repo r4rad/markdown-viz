@@ -1,6 +1,6 @@
 # MarkdownViz
 
-A zero-framework, performance-oriented Markdown editor, live preview, and beautifier with multi-tab sessions, diagram support, rich file conversion, and optional cloud sync — built entirely in vanilla TypeScript with Vite.
+A zero-framework, performance-oriented Markdown editor, live preview, and beautifier with multi-tab sessions, diagram support, rich file conversion, AI-powered audio summaries, real-time CRDT collaboration, and optional cloud sync — built entirely in vanilla TypeScript with Vite.
 
 > **Live app**: https://markdown-viz.web.app
 
@@ -71,6 +71,20 @@ All themes ship with configurable syntax-color CSS variables (`--mk-heading`, `-
 - **HTML** — self-contained HTML with inline styles, no external CDN required at read time
 - **PDF** — html2canvas + jsPDF, A4 portrait, auto-paginated
 
+### 🔊 AI Audio Summaries
+- **Play button** — top bar plays a spoken summary of the active document via a floating draggable player
+- **Groq LLM** — if a free [Groq API key](https://console.groq.com/keys) is configured (Settings → AI Audio), uses `llama-3.1-8b-instant` to generate a 3–4 minute human-quality spoken narrative (warm, conversational, no code/URLs/emails read aloud)
+- **Extractive fallback** — without a Groq key, uses a fast local algorithm to extract key sentences
+- **Smart caching** — audio scripts are cached in Firestore by content checksum; regenerated only when the document changes or the generator kind changes (extractive → Groq)
+- **Floating player** — draggable play/pause/stop/volume controls, shows title and progress, can be dismissed at any time
+- **Text sanitization** — emails, URLs, inline code, markdown syntax stripped before speech synthesis so nothing sounds robotic
+- **Reliable pause/resume** — implemented as cancel+restart from saved position (more reliable than `speechSynthesis.pause()` in Chrome)
+
+### 🤝 Real-time Collaboration (CRDT)
+- **Conflict-free sync** — CRDT (Conflict-free Replicated Data Types) for real-time collaborative editing via Firestore
+- **Tamper-evident sync log** — every sync writes a log entry with userId, displayName, timestamp, checksum, and byte delta
+- **Share** — share any document via a public URL (copy link or native share sheet)
+
 ### Cloud Sync & Auth
 - **Optional** — the entire app works offline without any account
 - **Providers** — GitHub OAuth, Google OAuth (via Firebase Auth)
@@ -116,7 +130,7 @@ npm run build
 # Preview production build
 npm run preview
 
-# Run tests (137 tests, 9 files)
+# Run tests (274 tests, 17 files)
 npm test
 
 # Watch mode
@@ -155,6 +169,16 @@ firebase deploy --only firestore
 The included `firestore.rules` enforces user-scoped access:
 - `/users/{uid}/files/{fileId}` — only the owning user can read/write
 - `/feedback/{docId}` — public create, no read/update/delete
+
+### Optional: Groq API key for AI audio summaries
+
+Sign up at [console.groq.com](https://console.groq.com/keys) for a free API key (no credit card required — 30 requests/min, 14,400/day on the free tier). Once you have a key:
+
+1. Open the app → **Settings → AI Audio (Groq)**
+2. Paste your key (starts with `gsk_`)
+3. Click **Save**
+
+The key is stored in `localStorage` (client-side only, never sent to our servers). With a key set, every Play request will generate a human-quality spoken narrative via `llama-3.1-8b-instant` instead of the extractive fallback.
 
 ### Optional: EmailJS for feedback email delivery
 
@@ -224,6 +248,8 @@ All variables are optional. Copy `.env.example` to `.env.local` and override wha
 | [nomnoml](https://nomnoml.com/) | 1.x | UML diagrams | Lazy |
 | [Prettier](https://prettier.io/) | 3.x | Markdown beautifier | Lazy |
 | [Firebase](https://firebase.google.com/) | 11.x | Auth + Firestore sync | Lazy |
+| [Groq API](https://console.groq.com/) | — | LLM audio summarization (llama-3.1-8b-instant) | Runtime |
+| [Web Speech API](https://developer.mozilla.org/en-US/docs/Web/API/Web_Speech_API) | — | Text-to-speech synthesis | Browser |
 | [mammoth](https://github.com/mwilliamson/mammoth.js) | 1.x | DOCX → Markdown | Lazy |
 | [pdfjs-dist](https://github.com/nicnils/pdfjs-dist) | 4.x | PDF text extraction | Lazy |
 | [html2canvas](https://html2canvas.hertzen.com/) | 1.x | Preview → canvas for PDF | Lazy |
@@ -239,14 +265,15 @@ All heavy libraries are **lazy-loaded** on first use — initial JS payload is s
 
 ```
 src/
-  components/       # UI components (App, Toolbar, TabBar, Editor, Preview, …)
-  lib/              # Business logic (state, events, auth, import, export, feedback, …)
+  components/       # UI components (App, Toolbar, TabBar, Editor, Preview, AudioPlayer, …)
+  lib/              # Business logic (state, events, auth, audio, tts, groq-summarize, crdt, …)
   themes/           # Theme definitions and CSS variable maps
   styles/           # layout.css — all component styles
-  types.ts          # Shared TypeScript interfaces (FileTab, AppState, UserProfile, …)
+  types.ts          # Shared TypeScript interfaces (FileTab, AppState, AudioCache, …)
   main.ts           # Entry point
 
 tests/              # Vitest test files (unit, integration, smoke, regression)
+public/             # Static assets (robots.txt, sitemap.xml, favicon.svg)
 firestore.rules     # Firestore security rules
 firebase.json       # Firebase hosting + firestore config
 .env.example        # All supported environment variables with comments
@@ -267,7 +294,7 @@ agentrefdocs/       # Developer reference docs and sample Markdown (gitignored)
 ## 🧪 Testing
 
 ```bash
-npm test              # Run all 137 tests (9 files)
+npm test              # Run all 274 tests (17 files)
 npm run test:watch    # Watch mode
 npm run test:coverage # Coverage report
 ```
@@ -275,6 +302,7 @@ npm run test:coverage # Coverage report
 **Test coverage:**
 | File | Type | Focus |
 |------|------|-------|
+| `tests/audio.test.ts` | Unit + Integration | Audio script generation, sanitization, caching, chunking |
 | `tests/state.test.ts` | Unit + Integration | State management, tab operations, events |
 | `tests/events.test.ts` | Unit | Event bus subscribe/emit/unsubscribe |
 | `tests/themes.test.ts` | Unit | Theme definitions, CSS variable completeness |
@@ -284,6 +312,10 @@ npm run test:coverage # Coverage report
 | `tests/beautifier.test.ts` | Unit + Regression | Prettier + fallback beautifier edge cases |
 | `tests/feedback.test.ts` | Unit | Feedback submission, Firestore, email fallback |
 | `tests/types.test.ts` | Unit | TypeScript interface shape validation |
+| `tests/share.test.ts` | Unit | Share URL building and document loading |
+| `tests/sync-animation.test.ts` | Unit | CRDT sync animation states |
+| `tests/e2e.test.ts` | E2E | Full app smoke and interaction flows |
+| `tests/crdt.test.ts` | Unit | CRDT checksum and session management |
 
 ---
 
