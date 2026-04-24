@@ -52,17 +52,16 @@ describe('generateAudioScript() - summarized narrative', () => {
     expect(result).toContain('system design');
   });
 
-  it('provides section overview for multi-section documents', async () => {
+  it('includes all section headings for multi-section documents', async () => {
     const { generateAudioScript } = await import('../src/lib/audio');
     const md = '# My Doc\nIntro.\n\n## Setup\nInstallation steps.\n\n## Usage\nHow to use.\n\n## Troubleshooting\nCommon issues.';
     const result = generateAudioScript(md);
     expect(result).toContain('Setup');
     expect(result).toContain('Usage');
     expect(result).toContain('Troubleshooting');
-    expect(result.toLowerCase()).toMatch(/covers|sections/);
   });
 
-  it('summarizes each section to its first sentence, not full content', async () => {
+  it('summarizes each section with actual content, not full verbatim text', async () => {
     const { generateAudioScript } = await import('../src/lib/audio');
     const md = '# API Docs\n\n## Authentication\nAll requests require a Bearer token. Tokens expire after 24 hours. Refresh tokens are available via the refresh endpoint.';
     const result = generateAudioScript(md);
@@ -81,7 +80,8 @@ describe('generateAudioScript() - summarized narrative', () => {
     const outputWords = generateAudioScript(md).split(/\s+/).length;
     const inputWords = md.split(/\s+/).length;
     expect(outputWords).toBeLessThan(inputWords);
-    expect(outputWords).toBeLessThanOrEqual(400);
+    // Target is ~550 words (3-4 min), allow some overshoot for short section budgets
+    expect(outputWords).toBeLessThanOrEqual(700);
   });
 
   it('strips all markdown formatting characters from output', async () => {
@@ -112,12 +112,12 @@ describe('generateAudioScript() - summarized narrative', () => {
     expect(result).not.toContain('```');
   });
 
-  it('summarizes long bullet lists without reading each item', async () => {
+  it('lists bullet items naturally without markdown notation', async () => {
     const { generateAudioScript } = await import('../src/lib/audio');
     const md = '## Features\n' + Array.from({ length: 8 }, (_, i) => `- Feature ${i + 1}`).join('\n');
     const result = generateAudioScript(md);
     expect(result).not.toMatch(/- Feature/);
-    expect(result.toLowerCase()).toMatch(/items|features|covers/);
+    expect(result.toLowerCase()).toMatch(/key points|include|feature/);
   });
 
   it('handles plain paragraphs with no headings', async () => {

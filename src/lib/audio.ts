@@ -79,16 +79,15 @@ function cleanInline(text: string): string {
     .trim();
 }
 
-// Extract first meaningful sentence. Avoids splitting on abbreviations and
-// version numbers by requiring the next character after . to be uppercase or end.
-function firstSentence(text: string): string {
-  const t = cleanInline(text.trim());
-  // Sentence ends at ./?/! not followed immediately by a lowercase letter or digit
-  const m = t.match(/^.+?[.!?](?!\s*[a-z0-9])/);
-  if (m) return m[0].trim();
-  if (t.length <= 160) return t;
-  const cut = t.lastIndexOf(' ', 160);
-  return t.slice(0, cut > 0 ? cut : 160) + '.';
+function splitSentences(text: string): string[] {
+  return text
+    .split(/(?<=[.!?])\s+(?=[A-Z"'])/)
+    .map(s => s.trim())
+    .filter(s => s.length > 10);
+}
+
+function wordsIn(text: string): number {
+  return text.split(/\s+/).filter(Boolean).length;
 }
 
 // ─── Document structure ───────────────────────────────────────────────────────
@@ -190,30 +189,50 @@ function parseDocument(content: string): ParsedDoc {
 
 // ─── Section content summarizer ───────────────────────────────────────────────
 
-function summarizeBullets(bullets: string[]): string {
-  if (!bullets.length) return '';
-  if (bullets.length === 1) return `This includes ${bullets[0]}.`;
-  if (bullets.length <= 3) return `This covers ${bullets.join(', ')}.`;
-  if (bullets.length <= 7) {
-    return `This covers ${bullets.length} items including ${bullets.slice(0, 3).join(', ')}, and more.`;
-  }
-  return `This covers ${bullets.length} items.`;
-}
-
-function sectionNarrative(section: DocSection): string {
+/**
+ * Build a natural-language narrative for one section within a word budget.
+ * Extracts multiple sentences from prose content, lists bullets naturally,
+ * and describes diagrams.
+ */
+function sectionNarrative(section: DocSection, wordBudget: number): string {
   const parts: string[] = [];
+  let used = 0;
 
+  // Extract sentences from prose content (up to 70% of budget)
   if (section.content) {
-    const sentence = firstSentence(section.content);
-    if (sentence) parts.push(sentence);
+    const sentences = splitSentences(section.content);
+    const contentBudget = Math.floor(wordBudget * 0.7);
+    for (const s of sentences) {
+      const w = wordsIn(s);
+      if (used + w > contentBudget && used > 0) break;
+      parts.push(s);
+      used += w;
+    }
   }
 
-  if (section.bullets.length) {
-    parts.push(summarizeBullets(section.bullets));
+  // List bullets naturally (not just "X items")
+  if (section.bullets.length && used < wordBudget) {
+    const maxBullets = Math.max(3, Math.floor((wordBudget - used) / 5));
+    const shown = section.bullets.slice(0, maxBullets);
+    const overflow = section.bullets.length - shown.length;
+    let bulletText: string;
+    if (shown.length === 1) {
+      bulletText = `This includes ${shown[0]}.`;
+    } else if (overflow > 0) {
+      bulletText = `Key points include ${shown.slice(0, -1).join(', ')}, ${shown[shown.length - 1]}, and ${overflow} more.`;
+    } else {
+      bulletText = `Key points include ${shown.slice(0, -1).join(', ')}, and ${shown[shown.length - 1]}.`;
+    }
+    const w = wordsIn(bulletText);
+    if (used + w <= wordBudget + 15) {
+      parts.push(bulletText);
+      used += w;
+    }
   }
 
   for (const d of section.diagrams) {
-    parts.push(describeDiagram(d.lang, d.code));
+    const desc = describeDiagram(d.lang, d.code);
+    parts.push(desc);
   }
 
   if (section.codeBlocks.length === 1) {
@@ -227,63 +246,64 @@ function sectionNarrative(section: DocSection): string {
 
 // ─── Main script generator ────────────────────────────────────────────────────
 
+const TARGET_WORDS = 550; // ~3.5 min at 150 wpm
+
 export function generateAudioScript(content: string): string {
   if (!content.trim()) return '';
 
   const doc = parseDocument(content);
   const parts: string[] = [];
 
-  if (doc.title) parts.push(doc.title + '.');
+  if (doc.title) parts.push(`${doc.title}.`);
 
+  // Include up to 3 intro sentences
   if (doc.intro) {
-    const sentence = firstSentence(doc.intro);
-    if (sentence) parts.push(sentence);
+    const sentences = splitSentences(doc.intro).slice(0, 3);
+    if (sentences.length) parts.push(sentences.join(' '));
   }
 
-  // No sections: handle root-level content
+  // Flat docs (no sections)
   if (!doc.sections.length) {
-    if (doc.rootBullets.length) parts.push(summarizeBullets(doc.rootBullets));
-    for (const d of doc.rootDiagrams) parts.push(describeDiagram(d.lang, d.code));
-    if (doc.rootCodeBlocks.length === 1) {
-      parts.push(`There is a ${doc.rootCodeBlocks[0]} code example.`);
-    } else if (doc.rootCodeBlocks.length > 1) {
-      parts.push(`There are ${doc.rootCodeBlocks.length} code examples.`);
+    if (doc.rootBullets.length) {
+      const shown = doc.rootBullets.slice(0, 8);
+      const overflow = doc.rootBullets.length - shown.length;
+      const joined = shown.slice(0, -1).join(', ') + (shown.length > 1 ? `, and ${shown[shown.length - 1]}` : shown[0]);
+      parts.push(overflow > 0
+        ? `Key points include ${joined}, and ${overflow} more.`
+        : `Key points include ${joined}.`);
     }
-    if (!parts.length) {
-      // Pure paragraphs with no title or structure
+    for (const d of doc.rootDiagrams) parts.push(describeDiagram(d.lang, d.code));
+    if (!parts.length || (parts.length === 1 && doc.title)) {
+      // Pure prose — extract sentences up to target
       const cleaned = cleanInline(content.replace(/```[\s\S]*?```/g, ''));
-      const sentences = cleaned
-        .split(/(?<=[.!?])\s+(?=[A-Z])/)
-        .map(s => s.trim())
-        .filter(s => s.length > 20)
-        .slice(0, 4);
-      return sentences.join(' ');
+      const sentences = splitSentences(cleaned);
+      let words = 0;
+      const out: string[] = [];
+      for (const s of sentences) {
+        const w = wordsIn(s);
+        if (words + w > TARGET_WORDS) break;
+        out.push(s);
+        words += w;
+      }
+      return out.join(' ');
     }
     return parts.join(' ');
   }
 
-  // Section overview (only when 2+ H2 sections)
-  const h2s = doc.sections.filter(s => s.level === 2);
-  if (h2s.length >= 2) {
-    const names = h2s.map(s => s.heading);
-    const last = names[names.length - 1];
-    const rest = names.slice(0, -1).join(', ');
-    parts.push(`It covers ${rest}, and ${last}.`);
-  }
+  // Distribute word budget evenly across all sections.
+  // No "It covers X, Y, Z" list — that sounds like a table of contents.
+  const headerWords = wordsIn(parts.join(' '));
+  const remaining = Math.max(TARGET_WORDS - headerWords, 100);
+  const perSection = Math.max(30, Math.floor(remaining / doc.sections.length));
 
-  // Per-section narrative with hard word cap
-  let wordCount = parts.join(' ').split(/\s+/).length;
   for (const section of doc.sections) {
-    if (wordCount >= 400) break;
-    const narrative = sectionNarrative(section);
+    const narrative = sectionNarrative(section, perSection);
     const line = narrative
-      ? `${section.heading}: ${narrative}`
+      ? `${section.heading}. ${narrative}`
       : `${section.heading}.`;
     parts.push(line);
-    wordCount += line.split(/\s+/).length;
   }
 
-  // Root-level diagrams after sections
   for (const d of doc.rootDiagrams) parts.push(describeDiagram(d.lang, d.code));
 
   return parts.join(' ');
