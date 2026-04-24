@@ -142,6 +142,12 @@ export function createToolbar(): HTMLElement {
     </div>
 
     <div class="toolbar-group">
+      <button class="toolbar-btn" id="play-audio-btn" data-action="play-audio" title="Read document aloud">
+        ${icon('play')}<span class="btn-label desktop-only">Listen</span>
+      </button>
+    </div>
+
+    <div class="toolbar-group">
       <button class="toolbar-btn sync-cloud-btn" data-action="cloud-sync" id="cloud-sync-btn" title="Sync to cloud (Ctrl+S)" style="display:none">
         ${icon('cloud-sync')}
       </button>
@@ -154,6 +160,10 @@ export function createToolbar(): HTMLElement {
     </div>
 
     <div class="toolbar-group" id="auth-area"></div>
+
+    <div class="toolbar-group" id="collab-indicator" style="display:none">
+      ${icon('users')}<span class="collab-badge" id="collab-badge" title="Collaboration active"></span>
+    </div>
 
     <div class="toolbar-group">
       <button class="toolbar-btn settings-btn" data-action="open-settings" title="Settings">${icon('gear')}</button>
@@ -180,6 +190,11 @@ export function createToolbar(): HTMLElement {
     if (syncBtn) syncBtn.style.display = profile ? '' : 'none';
     const shareBtn = el.querySelector('#share-btn') as HTMLElement | null;
     if (shareBtn) shareBtn.style.display = (profile && isSharingEnabled()) ? '' : 'none';
+  });
+
+  on('collab-changed', (active: unknown) => {
+    const indicator = el.querySelector('#collab-indicator') as HTMLElement | null;
+    if (indicator) indicator.style.display = active ? '' : 'none';
   });
 
   return el;
@@ -289,6 +304,9 @@ function setupToolbarEvents(toolbar: HTMLElement): void {
         break;
       case 'copy-editor':
         emit('copy-editor');
+        break;
+      case 'play-audio':
+        emit('play-audio-request');
         break;
       case 'cloud-sync':
         emit('cloud-sync-request');
