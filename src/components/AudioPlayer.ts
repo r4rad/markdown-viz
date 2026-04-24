@@ -2,7 +2,6 @@ import { icon } from './icons';
 
 export type PlayerPhase =
   | 'hidden'
-  | 'loading'    // model downloading/initialising
   | 'generating' // TTS synthesis in progress
   | 'playing'
   | 'paused'
@@ -156,7 +155,7 @@ export function showAudioPlayer(title: string, cbs: AudioPlayerCallbacks): void 
   const titleEl = playerEl.querySelector<HTMLElement>('#apl-title');
   if (titleEl) titleEl.textContent = title;
   playerEl.classList.remove('audio-player-hidden');
-  setPhase('loading');
+  setPhase('generating');
 }
 
 export function hideAudioPlayer(): void {
@@ -181,14 +180,6 @@ export function setPlayerPhase(p: PlayerPhase, extra?: { progress?: number; mess
   const hide = (el: HTMLElement) => { el.style.display = 'none'; };
 
   switch (p) {
-    case 'loading':
-      show(statusRow); hide(seekRow); hide(ctrlRow);
-      statusText.textContent = extra?.progress != null
-        ? `Loading model… ${extra.progress}%`
-        : 'Loading model…';
-      loaderFill.style.width = `${extra?.progress ?? 0}%`;
-      break;
-
     case 'generating':
       show(statusRow); hide(seekRow); hide(ctrlRow);
       statusText.textContent = 'Generating audio…';

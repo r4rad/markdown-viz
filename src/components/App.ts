@@ -26,7 +26,7 @@ import {
   generateAudioScript, isCacheValid, loadAudioCache, saveAudioCache,
   float32ToWav, loadCachedAudio, cacheAudio,
 } from '../lib/audio';
-import { initKokoro, synthesizeAudio, playWavBuffer } from '../lib/tts';
+import { synthesizeAudio, playWavBuffer } from '../lib/tts';
 import type { AudioControls } from '../lib/tts';
 import type { UserProfile } from '../types';
 
@@ -391,12 +391,10 @@ async function handlePlayAudio(): Promise<void> {
     return;
   }
 
-  // ── 3. Synthesize with Kokoro (model loads lazily) ────────────────────────
+  // ── 3. Synthesize via HuggingFace TTS API ────────────────────────────────
   try {
-    let result: { audio: Float32Array; sampleRate: number };
-    result = await synthesizeAudio(script, {
-      onModelProgress: (pct) => setPlayerPhase('loading', { progress: pct }),
-      onGenerating: ()       => setPlayerPhase('generating'),
+    const result = await synthesizeAudio(script, {
+      onGenerating: () => setPlayerPhase('generating'),
     });
 
     const buffer = float32ToWav(result.audio, result.sampleRate);

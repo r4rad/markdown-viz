@@ -1,10 +1,14 @@
-// TTS runtime adapter: Kokoro Web Worker management + HTMLAudioElement playback.
-// Pure text generation lives in audio.ts; this file handles browser APIs.
+// TTS via HuggingFace Inference API — server-side synthesis, no browser model download.
+// Model: facebook/mms-tts-eng (VITS, CC-BY-NC 4.0 for non-commercial use)
+// Audio is cached in IndexedDB after first synthesis; subsequent plays are instant.
 
-export type KokoroStatus = 'idle' | 'loading' | 'ready' | 'error';
+import { splitIntoChunks } from './audio';
+
+const HF_TTS_URL = 'https://api-inference.huggingface.co/models/facebook/mms-tts-eng';
+const MAX_RETRIES = 3;
+const CONCURRENCY = 3; // max parallel chunk requests to avoid rate-limiting
 
 export interface SynthesisCallbacks {
-  onModelProgress?: (pct: number) => void;
   onGenerating?: () => void;
 }
 
@@ -22,116 +26,105 @@ export interface PlaybackCallbacks {
   onError: (msg: string) => void;
 }
 
-// ─── Worker state ─────────────────────────────────────────────────────────────
+// ─── Internal helpers ─────────────────────────────────────────────────────────
 
-let worker: Worker | null = null;
-let workerStatus: KokoroStatus = 'idle';
+const sleep = (ms: number) => new Promise<void>(r => setTimeout(r, ms));
 
-type InitResolve = () => void;
-type InitReject = (err: Error) => void;
-let pendingInit: { resolve: InitResolve; reject: InitReject } | null = null;
-let initProgressCb: ((pct: number) => void) | undefined;
-
-type SynthResolve = (v: { audio: Float32Array; sampleRate: number }) => void;
-type SynthReject = (err: Error) => void;
-let pendingSynth: { resolve: SynthResolve; reject: SynthReject } | null = null;
-
-function getOrCreateWorker(): Worker {
-  if (!worker) {
-    worker = new Worker(new URL('../workers/audio-worker.ts', import.meta.url), { type: 'module' });
-    worker.onmessage = handleWorkerMessage;
-    worker.onerror = (e) => {
-      const err = new Error(e.message || 'Worker error');
-      workerStatus = 'error';
-      pendingInit?.reject(err);
-      pendingInit = null;
-      pendingSynth?.reject(err);
-      pendingSynth = null;
-    };
-  }
-  return worker;
-}
-
-function handleWorkerMessage(e: MessageEvent): void {
-  const msg = e.data;
-
-  switch (msg.type) {
-    case 'INIT_PROGRESS':
-      initProgressCb?.(msg.progress as number);
-      break;
-
-    case 'INIT_DONE':
-      workerStatus = 'ready';
-      pendingInit?.resolve();
-      pendingInit = null;
-      break;
-
-    case 'INIT_ERROR':
-      workerStatus = 'error';
-      pendingInit?.reject(new Error(msg.error as string));
-      pendingInit = null;
-      break;
-
-    case 'SYNTHESIS_DONE': {
-      const audio = new Float32Array(msg.audio as ArrayBuffer);
-      pendingSynth?.resolve({ audio, sampleRate: msg.sampleRate as number });
-      pendingSynth = null;
-      break;
-    }
-
-    case 'SYNTHESIS_ERROR':
-      pendingSynth?.reject(new Error(msg.error as string));
-      pendingSynth = null;
-      break;
-  }
-}
-
-/** Initialize the Kokoro model in the Worker (no-op if already loaded). */
-export async function initKokoro(onProgress?: (pct: number) => void): Promise<void> {
-  if (workerStatus === 'ready') return;
-  if (workerStatus === 'loading') {
-    // Attach to the already-running init
-    initProgressCb = onProgress;
-    return new Promise<void>((resolve, reject) => {
-      pendingInit = { resolve, reject };
-    });
-  }
-
-  workerStatus = 'loading';
-  initProgressCb = onProgress;
-  const w = getOrCreateWorker();
-
-  return new Promise<void>((resolve, reject) => {
-    pendingInit = { resolve, reject };
-    w.postMessage({ type: 'INIT' });
+async function callHfApi(
+  text: string,
+  signal: AbortSignal,
+  attempt = 0,
+): Promise<ArrayBuffer> {
+  const resp = await fetch(HF_TTS_URL, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ inputs: text }),
+    signal,
   });
+
+  if (resp.ok) return resp.arrayBuffer();
+
+  // Model warming up — wait then retry
+  if ((resp.status === 503 || resp.status === 500) && attempt < MAX_RETRIES) {
+    const json: { estimated_time?: number } = await resp.json().catch(() => ({}));
+    const wait = Math.min((json.estimated_time ?? 10) * 1000, 20_000);
+    await sleep(wait);
+    return callHfApi(text, signal, attempt + 1);
+  }
+
+  // Rate limited — back off then retry
+  if (resp.status === 429 && attempt < MAX_RETRIES) {
+    await sleep(5_000 * (attempt + 1));
+    return callHfApi(text, signal, attempt + 1);
+  }
+
+  throw new Error(`TTS API ${resp.status}: ${resp.statusText}`);
 }
 
-/** Synthesize text to audio using the Kokoro Worker. */
+/** Run tasks in order, at most `limit` at a time. Returns results in input order. */
+async function poolAll<T>(tasks: Array<() => Promise<T>>, limit: number): Promise<T[]> {
+  const results: T[] = new Array(tasks.length);
+  let next = 0;
+  const worker = async () => {
+    while (next < tasks.length) {
+      const i = next++;
+      results[i] = await tasks[i]();
+    }
+  };
+  await Promise.all(Array.from({ length: Math.min(limit, tasks.length) }, worker));
+  return results;
+}
+
+// ─── Synthesis ────────────────────────────────────────────────────────────────
+
+let currentAbort: AbortController | null = null;
+
 export async function synthesizeAudio(
   text: string,
   callbacks?: SynthesisCallbacks,
 ): Promise<{ audio: Float32Array; sampleRate: number }> {
-  if (workerStatus !== 'ready') {
-    await initKokoro(callbacks?.onModelProgress);
-  }
+  // Cancel any previous in-flight synthesis
+  currentAbort?.abort();
+  const abort = new AbortController();
+  currentAbort = abort;
 
   callbacks?.onGenerating?.();
 
-  const w = getOrCreateWorker();
-  const id = Math.random().toString(36).slice(2);
+  const chunks = splitIntoChunks(text);
 
-  return new Promise<{ audio: Float32Array; sampleRate: number }>((resolve, reject) => {
-    pendingSynth = { resolve, reject };
-    w.postMessage({ type: 'SYNTHESIZE', text, id });
-  });
+  // Bounded parallel API calls — preserves chunk order
+  const rawBuffers = await poolAll(
+    chunks.map(c => () => callHfApi(c, abort.signal)),
+    CONCURRENCY,
+  );
+
+  if (abort.signal.aborted) throw new DOMException('Synthesis cancelled', 'AbortError');
+
+  // Decode all audio responses using a single Web Audio context
+  const audioCtx = new AudioContext();
+  let audioBuffers: AudioBuffer[];
+  try {
+    audioBuffers = await Promise.all(
+      rawBuffers.map(b => audioCtx.decodeAudioData(b.slice(0))),
+    );
+  } finally {
+    audioCtx.close().catch(() => undefined);
+  }
+
+  // Concatenate mono PCM (always channel 0 from a TTS model)
+  const sampleRate = audioBuffers[0].sampleRate;
+  const totalLength = audioBuffers.reduce((s, b) => s + b.length, 0);
+  const audio = new Float32Array(totalLength);
+  let offset = 0;
+  for (const buf of audioBuffers) {
+    audio.set(buf.getChannelData(0), offset);
+    offset += buf.length;
+  }
+
+  return { audio, sampleRate };
 }
 
-export function getKokoroStatus(): KokoroStatus {
-  return workerStatus;
-}
-
-// ─── Playback via HTMLAudioElement ───────────────────────────────────────────
+// ─── Playback via HTMLAudioElement ────────────────────────────────────────────
 
 let activeAudio: HTMLAudioElement | null = null;
 let activeObjectUrl: string | null = null;
@@ -148,10 +141,6 @@ function releaseActiveAudio(): void {
   }
 }
 
-/**
- * Play a WAV ArrayBuffer via an HTMLAudioElement and return playback controls.
- * Stops any currently playing audio first.
- */
 export function playWavBuffer(
   buffer: ArrayBuffer,
   callbacks: PlaybackCallbacks,
@@ -189,3 +178,4 @@ export function playWavBuffer(
     setVolume: (vol: number) => { audio.volume = Math.max(0, Math.min(1, vol)); },
   };
 }
+

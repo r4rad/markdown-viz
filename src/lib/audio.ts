@@ -364,8 +364,8 @@ export function float32ToWav(audio: Float32Array, sampleRate: number): ArrayBuff
 
 // ─── IndexedDB audio cache (WAV bytes, max 5 entries) ────────────────────────
 
-export const TTS_VOICE = 'af_bella';
-export const TTS_CACHE_VERSION = 1;
+export const TTS_VOICE = 'hf-mms';
+export const TTS_CACHE_VERSION = 2;
 const MAX_AUDIO_CACHE = 5;
 const AUDIO_MANIFEST_KEY = `audio-manifest-v${TTS_CACHE_VERSION}`;
 
@@ -406,4 +406,28 @@ export async function cacheAudio(checksum: string, buffer: ArrayBuffer): Promise
 // ─── Playback ─────────────────────────────────────────────────────────────────
 
 // (Removed: playAudioScript, AudioState — replaced by playWavBuffer in tts.ts)
+
+// ─── Text chunking for TTS ────────────────────────────────────────────────────
+
+/**
+ * Split text into sentence-boundary chunks of at most maxChars each.
+ * Chunks preserve order and are non-empty.
+ */
+export function splitIntoChunks(text: string, maxChars = 400): string[] {
+  const sentences = text.match(/[^.!?\n]+[.!?\n]+|\S[^.!?\n]*$/g) ?? [text];
+  const chunks: string[] = [];
+  let current = '';
+
+  for (const sentence of sentences) {
+    if (current.length + sentence.length > maxChars && current.length > 0) {
+      chunks.push(current.trim());
+      current = sentence;
+    } else {
+      current += sentence;
+    }
+  }
+  if (current.trim()) chunks.push(current.trim());
+
+  return chunks.length ? chunks : [text.slice(0, maxChars)];
+}
 

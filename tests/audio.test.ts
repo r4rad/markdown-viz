@@ -289,3 +289,47 @@ describe('audioCacheKey()', () => {
     expect(audioCacheKey('aaa')).not.toBe(audioCacheKey('bbb'));
   });
 });
+
+// ─── splitIntoChunks() ───────────────────────────────────────────────────────
+
+describe('splitIntoChunks()', () => {
+  it('returns single chunk when text is shorter than maxChars', async () => {
+    const { splitIntoChunks } = await import('../src/lib/audio');
+    const result = splitIntoChunks('Hello world.', 400);
+    expect(result).toHaveLength(1);
+    expect(result[0]).toBe('Hello world.');
+  });
+
+  it('splits on sentence boundaries when text exceeds maxChars', async () => {
+    const { splitIntoChunks } = await import('../src/lib/audio');
+    const long = 'First sentence. Second sentence. Third sentence.';
+    const result = splitIntoChunks(long, 30);
+    expect(result.length).toBeGreaterThan(1);
+    result.forEach(chunk => expect(chunk.length).toBeLessThanOrEqual(50));
+  });
+
+  it('preserves all content across chunks (no text lost)', async () => {
+    const { splitIntoChunks } = await import('../src/lib/audio');
+    const text = 'One sentence here! Another follows. And a third.';
+    const chunks = splitIntoChunks(text, 25);
+    const rejoined = chunks.join(' ');
+    // Every original sentence should appear somewhere in the output
+    expect(rejoined).toContain('One sentence here');
+    expect(rejoined).toContain('Another follows');
+    expect(rejoined).toContain('And a third');
+  });
+
+  it('handles empty-ish text gracefully', async () => {
+    const { splitIntoChunks } = await import('../src/lib/audio');
+    const result = splitIntoChunks('', 400);
+    expect(result).toHaveLength(1);
+  });
+
+  it('uses 400 char default limit', async () => {
+    const { splitIntoChunks } = await import('../src/lib/audio');
+    const text = 'Short text.';
+    const result = splitIntoChunks(text);
+    expect(result).toHaveLength(1);
+    expect(result[0]).toBe('Short text.');
+  });
+});

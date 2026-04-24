@@ -43,7 +43,6 @@
     "idb-keyval": "^6.2.2",
     "jspdf": "^4.2.1",
     "katex": "^0.16.44",
-    "kokoro-js": "^1.2.1",
     "mammoth": "^1.12.0",
     "marked": "^17.0.5",
     "mermaid": "^11.13.0",

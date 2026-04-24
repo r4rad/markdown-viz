@@ -23,7 +23,6 @@ export default defineConfig({
     format: 'es',
   },
   optimizeDeps: {
-    exclude: ['kokoro-js', 'onnxruntime-web'],
   },
   test: {
     environment: 'jsdom',
