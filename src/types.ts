@@ -53,3 +53,47 @@ export interface FeedbackData {
 
 // ─── Events ───
 export type EventCallback<T = unknown> = (data: T) => void;
+
+// ─── CRDT / Collaborative Editing ───
+export interface CollaborativeDocMeta {
+  docId: string;
+  name: string;
+  ownerId: string;
+  createdAt: number;
+  updatedAt: number;
+  checksum: string;         // SHA-256 of current content
+  collaborators: string[];  // array of userIds allowed to edit
+}
+
+export interface CrdtUpdate {
+  update: number[];   // serialized Yjs Uint8Array as number array
+  userId: string;
+  userEmail: string | null;
+  timestamp: number;
+  checksum: string;   // SHA-256 of content after this update
+  deltaBytes: number; // byte length of the serialized update
+}
+
+// ─── Sync Log ───
+export interface SyncLogEntry {
+  id?: string;
+  docId: string;
+  userId: string;
+  userEmail: string | null;
+  displayName: string | null;
+  syncedAt: number;
+  checksum: string;     // SHA-256 of document content at sync time
+  deltaBytes: number;   // bytes changed (update size for CRDT; content diff for personal sync)
+  source: 'personal' | 'collaborative';
+}
+
+// ─── Audio Cache ───
+export const AUDIO_GENERATOR_VERSION = 1;
+
+export interface AudioCache {
+  checksum: string;           // SHA-256 of content that generated this script
+  script: string;             // pre-processed narration text
+  generatedAt: number;
+  generatedBy: string;        // userId
+  generatorVersion: number;   // bump when generateAudioScript logic changes
+}
