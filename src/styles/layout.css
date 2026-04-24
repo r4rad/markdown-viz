@@ -297,6 +297,8 @@
   border-bottom: 1px solid var(--border-primary);
   overflow-x: auto;
   overflow-y: hidden;
+  -webkit-overflow-scrolling: touch;
+  scroll-behavior: smooth;
   scrollbar-width: thin;
 }
 
@@ -322,6 +324,7 @@
   cursor: pointer;
   user-select: none;
   white-space: nowrap;
+  flex-shrink: 0;
   min-width: 0;
   max-width: 180px;
   transition: background 0.1s;
@@ -364,11 +367,13 @@
   cursor: pointer;
   flex-shrink: 0;
   opacity: 0;
+  pointer-events: none;
   transition: opacity 0.1s, background 0.1s;
 }
 
 .tab:hover .tab-close {
   opacity: 1;
+  pointer-events: auto;
 }
 
 .tab-close:hover {
@@ -798,9 +803,36 @@
 }
 
 @media (max-width: 480px) {
+  .tab-bar {
+    height: 44px;
+    min-height: 44px;
+  }
   .tab {
+    height: 44px;
     max-width: 120px;
-    padding: 0 8px;
+    min-width: 72px;
+    padding: 0 10px;
+  }
+  /* Hide close button on mobile — revealed via long-press in JS */
+  .tab-close {
+    display: none !important;
+    pointer-events: none !important;
+  }
+  /* Shown when JS adds .show-close class on long-press */
+  .tab.show-close .tab-close {
+    display: flex !important;
+    opacity: 1 !important;
+    pointer-events: auto !important;
+    width: 26px;
+    height: 26px;
+    font-size: 18px;
+    border-radius: 50%;
+    background: var(--bg-active);
+    color: var(--error);
+  }
+  .tab-add {
+    min-width: 44px;
+    width: 44px;
   }
   .toolbar-brand .brand-text {
     display: none;
