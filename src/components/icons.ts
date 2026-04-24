@@ -36,6 +36,7 @@ const ICONS: Record<string, string> = {
   share: `<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3"><circle cx="12" cy="3" r="2"/><circle cx="4" cy="8" r="2"/><circle cx="12" cy="13" r="2"/><line x1="5.8" y1="7" x2="10.2" y2="4"/><line x1="5.8" y1="9" x2="10.2" y2="12"/></svg>`,
   copy: `<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3"><rect x="5" y="5" width="9" height="9" rx="1"/><path d="M3 11V3a1 1 0 0 1 1-1h8"/></svg>`,
   cursor: `<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3"><path d="M8 2v12"/><path d="M5 14h6"/><path d="M4 5h8"/></svg>`,
+  'doc-edit': `<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3"><rect x="1" y="2" width="14" height="12" rx="1.5"/><path d="M7 12L11 8L12.5 9.5L8.5 13Z"/><line x1="11" y1="8" x2="12.5" y2="6.5" stroke-linecap="round"/></svg>`,
   'scroll-link': `<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3"><rect x="1" y="2" width="5" height="12" rx="1"/><rect x="10" y="2" width="5" height="12" rx="1"/><path d="M6 6h4M6 10h4" stroke-dasharray="1.5 1.5"/><circle cx="3.5" cy="6" r="0.7" fill="currentColor"/><circle cx="12.5" cy="6" r="0.7" fill="currentColor"/></svg>`,
   play: `<svg viewBox="0 0 16 16" fill="currentColor"><polygon points="4,2 14,8 4,14"/></svg>`,
   pause: `<svg viewBox="0 0 16 16" fill="currentColor"><rect x="3" y="2" width="4" height="12" rx="1"/><rect x="9" y="2" width="4" height="12" rx="1"/></svg>`,

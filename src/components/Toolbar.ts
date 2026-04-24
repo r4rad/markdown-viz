@@ -122,7 +122,7 @@ export function createToolbar(): HTMLElement {
       <button class="toolbar-btn" data-action="show-preview" title="Preview only">${icon('eye')}</button>
       <button class="toolbar-btn active" data-action="show-split" title="Split view">${icon('columns')}</button>
       <span class="toolbar-separator" style="height:20px;margin:0 2px"></span>
-      <button class="toolbar-btn" data-action="toggle-preview-edit" title="Edit in preview" id="preview-edit-btn">${icon('cursor')}</button>
+      <button class="toolbar-btn" data-action="toggle-preview-edit" title="Edit in preview" id="preview-edit-btn">${icon('doc-edit')}</button>
       <button class="toolbar-btn active" data-action="toggle-sync" title="Sync scroll">${icon('scroll-link')}</button>
     </div>
 
