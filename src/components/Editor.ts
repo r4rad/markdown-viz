@@ -221,6 +221,22 @@ export function createEditor(): HTMLElement {
     }
   });
 
+  on('crdt-remote-update', (content: unknown) => {
+    if (!view) return;
+    const curPos = view.state.selection.main.head;
+    const newContent = content as string;
+    ignoreNextUpdate = true;
+    view.dispatch({
+      changes: { from: 0, to: view.state.doc.length, insert: newContent },
+    });
+    try {
+      const clampedPos = Math.min(curPos, newContent.length);
+      view.dispatch({ selection: { anchor: clampedPos } });
+    } catch {
+      // ignore invalid cursor after remote replace
+    }
+  });
+
   on('layout-changed', () => {
     requestAnimationFrame(() => view?.requestMeasure());
   });
