@@ -3,6 +3,7 @@ import { createTabBar } from './TabBar';
 import { createEditor, getEditorView } from './Editor';
 import { createPreview } from './Preview';
 import { createStatusBar } from './StatusBar';
+import { createAudioPlayer, showAudioPlayer, updateAudioPlayerState } from './AudioPlayer';
 import { initDiagramModal } from './DiagramModal';
 import { initSettingsMenu, openSettingsMenu } from './SettingsMenu';
 import { getState, addTab, restoreState, toggleEditor, togglePreview, getActiveTab } from '../lib/state';
@@ -12,9 +13,12 @@ import { applyTheme, getSavedTheme } from '../themes/themes';
 import { setupImport, openFilePicker } from '../lib/import';
 import { exportMarkdown, exportHTML, exportPDF, exportDOCX } from '../lib/export';
 import { beautifyMarkdown } from '../lib/beautifier';
-import { initFirebase, syncToCloud, updateCloudFileName, isAuthenticated } from '../lib/auth';
+import { initFirebase, syncToCloud, updateCloudFileName, isAuthenticated, getCurrentUser } from '../lib/auth';
 import { initAuthUI } from './AuthUI';
 import { shareDocument, loadSharedDocument, getShareIdFromURL, buildShareURL, triggerSystemShare, isSharingEnabled } from '../lib/share';
+import { computeChecksum, startCollaboration, stopCollaboration, getActiveSession } from '../lib/crdt';
+import { writeSyncLog } from '../lib/sync-log';
+import { generateAudioScript, isCacheValid, loadAudioCache, saveAudioCache, playAudioScript } from '../lib/audio';
 import type { UserProfile } from '../types';
 
 export async function initApp(): Promise<void> {
@@ -40,9 +44,10 @@ export async function initApp(): Promise<void> {
   const splitHandle = createSplitHandle(mainArea);
   const previewPane = createPreview();
   const statusBar = createStatusBar();
+  const audioPlayer = createAudioPlayer();
 
   mainArea.append(editorPane, splitHandle, previewPane);
-  app.append(toolbar, tabBar, createBetaBanner(), mainArea, statusBar);
+  app.append(toolbar, tabBar, createBetaBanner(), mainArea, statusBar, audioPlayer);
 
   // Initialize subsystems
   initDiagramModal();
@@ -86,6 +91,9 @@ export async function initApp(): Promise<void> {
 
   // Share button
   on('share-request', () => handleShareRequest());
+
+  // Play audio button
+  on('play-audio-request', () => handlePlayAudio());
 
   // Rename cloud file when tab is renamed
   on('tab-renamed', (data: unknown) => {
@@ -226,7 +234,24 @@ async function triggerCloudSync(): Promise<void> {
   const btn = document.getElementById('cloud-sync-btn');
   if (btn) btn.classList.add('syncing');
 
+  const tab = getActiveTab();
   const ok = await syncToCloud(getState());
+
+  if (ok && tab) {
+    const user = getCurrentUser();
+    const checksum = await computeChecksum(tab.content);
+    const session = getActiveSession(tab.id);
+    writeSyncLog({
+      docId: tab.id,
+      userId: user?.uid ?? 'unknown',
+      userEmail: user?.email ?? null,
+      displayName: user?.displayName ?? null,
+      syncedAt: Date.now(),
+      checksum,
+      deltaBytes: new TextEncoder().encode(tab.content).byteLength,
+      source: session ? 'collaborative' : 'personal',
+    }).catch(console.error);
+  }
 
   if (btn) {
     btn.classList.remove('syncing');
@@ -245,8 +270,25 @@ function setupAutoSync(): void {
   on('auth-changed', (profile: unknown) => {
     if (autoSyncTimer) { clearInterval(autoSyncTimer); autoSyncTimer = null; }
     if (profile) {
-      autoSyncTimer = setInterval(() => {
-        if (isAuthenticated()) syncToCloud(getState()).catch(console.error);
+      autoSyncTimer = setInterval(async () => {
+        if (!isAuthenticated()) return;
+        const tab = getActiveTab();
+        const ok = await syncToCloud(getState()).catch(() => false);
+        if (ok && tab) {
+          const user = getCurrentUser();
+          const checksum = await computeChecksum(tab.content);
+          const session = getActiveSession(tab.id);
+          writeSyncLog({
+            docId: tab.id,
+            userId: user?.uid ?? 'unknown',
+            userEmail: user?.email ?? null,
+            displayName: user?.displayName ?? null,
+            syncedAt: Date.now(),
+            checksum,
+            deltaBytes: new TextEncoder().encode(tab.content).byteLength,
+            source: session ? 'collaborative' : 'personal',
+          }).catch(console.error);
+        }
       }, intervalMs);
     }
   });
@@ -293,8 +335,38 @@ function createBetaBanner(): HTMLElement {
   return banner;
 }
 
-async function handleShareRequest(): Promise<void> {
-  if (!isSharingEnabled() || !isAuthenticated()) return;
+async function handlePlayAudio(): Promise<void> {
+  const tab = getActiveTab();
+  if (!tab) return;
+
+  const checksum = await computeChecksum(tab.content);
+
+  let script: string;
+  const cached = await loadAudioCache(checksum);
+  if (isCacheValid(cached, checksum)) {
+    script = cached!.script;
+  } else {
+    script = generateAudioScript(tab.content);
+    if (script && isAuthenticated()) {
+      const user = getCurrentUser();
+      saveAudioCache(checksum, script, user?.uid ?? 'anonymous').catch(console.error);
+    }
+  }
+
+  if (!script) return;
+
+  const controls = playAudioScript(script, (state) => {
+    updateAudioPlayerState(state);
+  });
+
+  showAudioPlayer(
+    () => controls.pause(),
+    () => controls.resume(),
+    () => controls.stop(),
+  );
+}
+
+async function handleShareRequest(): Promise<void> {  if (!isSharingEnabled() || !isAuthenticated()) return;
   const tab = getActiveTab();
   if (!tab) return;
 
