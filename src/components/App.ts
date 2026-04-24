@@ -24,9 +24,8 @@ import { computeChecksum, startCollaboration, stopCollaboration, getActiveSessio
 import { writeSyncLog } from '../lib/sync-log';
 import {
   generateAudioScript, isCacheValid, loadAudioCache, saveAudioCache,
-  float32ToWav, loadCachedAudio, cacheAudio,
 } from '../lib/audio';
-import { synthesizeAudio, playWavBuffer } from '../lib/tts';
+import { synthesizeAndPlay } from '../lib/tts';
 import type { AudioControls } from '../lib/tts';
 import type { UserProfile } from '../types';
 
@@ -379,29 +378,10 @@ async function handlePlayAudio(): Promise<void> {
   }
   if (!script) { hideAudioPlayer(); return; }
 
-  // ── 2. Check IndexedDB for already-synthesized WAV ────────────────────────
-  const wavBuf = await loadCachedAudio(checksum);
-  if (wavBuf) {
-    activeAudioControls = playWavBuffer(wavBuf, {
-      onProgress: (cur, dur) => updatePlayerProgress(cur, dur),
-      onEnded:    ()          => { setPlayerPhase('paused'); },
-      onError:    (msg)       => setPlayerPhase('error', { message: msg }),
-    });
-    setPlayerPhase('playing');
-    return;
-  }
-
-  // ── 3. Synthesize via HuggingFace TTS API ────────────────────────────────
+  // ── 2. Speak via Web Speech API (instant, no model download) ─────────────
   try {
-    const result = await synthesizeAudio(script, {
-      onGenerating: () => setPlayerPhase('generating'),
-    });
-
-    const buffer = float32ToWav(result.audio, result.sampleRate);
-    cacheAudio(checksum, buffer.slice(0)).catch(console.error);
-
-    activeAudioControls = playWavBuffer(buffer, {
-      onProgress: (cur, dur) => updatePlayerProgress(cur, dur),
+    activeAudioControls = await synthesizeAndPlay(script, {
+      onProgress: (cur, dur) => { updatePlayerProgress(cur, dur); setPlayerPhase('playing'); },
       onEnded:    ()          => { setPlayerPhase('paused'); },
       onError:    (msg)       => setPlayerPhase('error', { message: msg }),
     });

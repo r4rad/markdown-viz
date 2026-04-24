@@ -1,16 +1,11 @@
-// TTS via HuggingFace Inference API — server-side synthesis, no browser model download.
-// Model: facebook/mms-tts-eng (VITS, CC-BY-NC 4.0 for non-commercial use)
-// Audio is cached in IndexedDB after first synthesis; subsequent plays are instant.
+// TTS via Web Speech API — zero latency, no model download, no external API.
+// Uses the best available neural voice on the device (Microsoft Neural on Windows,
+// Google voices on Chrome, built-in voices on macOS/iOS).
+// Text is split into ~150-char chunks to avoid Chrome's 15-second utterance cutoff bug.
 
 import { splitIntoChunks } from './audio';
 
-const HF_TTS_URL = 'https://api-inference.huggingface.co/models/facebook/mms-tts-eng';
-const MAX_RETRIES = 3;
-const CONCURRENCY = 3; // max parallel chunk requests to avoid rate-limiting
-
-export interface SynthesisCallbacks {
-  onGenerating?: () => void;
-}
+const SPEECH_CHUNK_CHARS = 150; // safe for all browsers including Chrome
 
 export interface AudioControls {
   pause: () => void;
@@ -26,156 +21,123 @@ export interface PlaybackCallbacks {
   onError: (msg: string) => void;
 }
 
-// ─── Internal helpers ─────────────────────────────────────────────────────────
+// ─── Voice selection ──────────────────────────────────────────────────────────
 
-const sleep = (ms: number) => new Promise<void>(r => setTimeout(r, ms));
+function pickBestVoice(voices: SpeechSynthesisVoice[]): SpeechSynthesisVoice | null {
+  const en = voices.filter(v => v.lang.startsWith('en'));
+  // Tier 1: Windows neural voices ("Microsoft Aria Online (Natural) - English (United States)")
+  const neural = en.find(v => /(online|natural|neural)/i.test(v.name) && /en.US/i.test(v.lang));
+  if (neural) return neural;
+  // Tier 2: Any Windows neural voice in any en locale
+  const anyNeural = en.find(v => /(online|natural|neural)/i.test(v.name));
+  if (anyNeural) return anyNeural;
+  // Tier 3: Google en-US (Chrome on non-Windows — decent quality)
+  const googleUS = en.find(v => /google/i.test(v.name) && v.lang === 'en-US');
+  if (googleUS) return googleUS;
+  // Tier 4: Any en-US
+  const usEn = en.find(v => v.lang === 'en-US');
+  if (usEn) return usEn;
+  return en[0] ?? null;
+}
 
-async function callHfApi(
-  text: string,
-  signal: AbortSignal,
-  attempt = 0,
-): Promise<ArrayBuffer> {
-  const resp = await fetch(HF_TTS_URL, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ inputs: text }),
-    signal,
+function loadVoices(): Promise<SpeechSynthesisVoice[]> {
+  const voices = window.speechSynthesis.getVoices();
+  if (voices.length) return Promise.resolve(voices);
+  return new Promise(resolve => {
+    const cb = () => { resolve(window.speechSynthesis.getVoices()); };
+    window.speechSynthesis.addEventListener('voiceschanged', cb, { once: true });
+    setTimeout(() => { resolve(window.speechSynthesis.getVoices()); }, 500);
   });
-
-  if (resp.ok) return resp.arrayBuffer();
-
-  // Model warming up — wait then retry
-  if ((resp.status === 503 || resp.status === 500) && attempt < MAX_RETRIES) {
-    const json: { estimated_time?: number } = await resp.json().catch(() => ({}));
-    const wait = Math.min((json.estimated_time ?? 10) * 1000, 20_000);
-    await sleep(wait);
-    return callHfApi(text, signal, attempt + 1);
-  }
-
-  // Rate limited — back off then retry
-  if (resp.status === 429 && attempt < MAX_RETRIES) {
-    await sleep(5_000 * (attempt + 1));
-    return callHfApi(text, signal, attempt + 1);
-  }
-
-  throw new Error(`TTS API ${resp.status}: ${resp.statusText}`);
 }
 
-/** Run tasks in order, at most `limit` at a time. Returns results in input order. */
-async function poolAll<T>(tasks: Array<() => Promise<T>>, limit: number): Promise<T[]> {
-  const results: T[] = new Array(tasks.length);
-  let next = 0;
-  const worker = async () => {
-    while (next < tasks.length) {
-      const i = next++;
-      results[i] = await tasks[i]();
-    }
-  };
-  await Promise.all(Array.from({ length: Math.min(limit, tasks.length) }, worker));
-  return results;
-}
+// ─── Synthesis + playback ─────────────────────────────────────────────────────
 
-// ─── Synthesis ────────────────────────────────────────────────────────────────
-
-let currentAbort: AbortController | null = null;
-
-export async function synthesizeAudio(
-  text: string,
-  callbacks?: SynthesisCallbacks,
-): Promise<{ audio: Float32Array; sampleRate: number }> {
-  // Cancel any previous in-flight synthesis
-  currentAbort?.abort();
-  const abort = new AbortController();
-  currentAbort = abort;
-
-  callbacks?.onGenerating?.();
-
-  const chunks = splitIntoChunks(text);
-
-  // Bounded parallel API calls — preserves chunk order
-  const rawBuffers = await poolAll(
-    chunks.map(c => () => callHfApi(c, abort.signal)),
-    CONCURRENCY,
-  );
-
-  if (abort.signal.aborted) throw new DOMException('Synthesis cancelled', 'AbortError');
-
-  // Decode all audio responses using a single Web Audio context
-  const audioCtx = new AudioContext();
-  let audioBuffers: AudioBuffer[];
-  try {
-    audioBuffers = await Promise.all(
-      rawBuffers.map(b => audioCtx.decodeAudioData(b.slice(0))),
-    );
-  } finally {
-    audioCtx.close().catch(() => undefined);
-  }
-
-  // Concatenate mono PCM (always channel 0 from a TTS model)
-  const sampleRate = audioBuffers[0].sampleRate;
-  const totalLength = audioBuffers.reduce((s, b) => s + b.length, 0);
-  const audio = new Float32Array(totalLength);
-  let offset = 0;
-  for (const buf of audioBuffers) {
-    audio.set(buf.getChannelData(0), offset);
-    offset += buf.length;
-  }
-
-  return { audio, sampleRate };
-}
-
-// ─── Playback via HTMLAudioElement ────────────────────────────────────────────
-
-let activeAudio: HTMLAudioElement | null = null;
-let activeObjectUrl: string | null = null;
-
-function releaseActiveAudio(): void {
-  if (activeAudio) {
-    activeAudio.pause();
-    activeAudio.src = '';
-    activeAudio = null;
-  }
-  if (activeObjectUrl) {
-    URL.revokeObjectURL(activeObjectUrl);
-    activeObjectUrl = null;
-  }
-}
-
-export function playWavBuffer(
-  buffer: ArrayBuffer,
+export async function synthesizeAndPlay(
+  script: string,
   callbacks: PlaybackCallbacks,
-): AudioControls {
-  releaseActiveAudio();
+): Promise<AudioControls> {
+  window.speechSynthesis.cancel();
 
-  const blob = new Blob([buffer], { type: 'audio/wav' });
-  const url = URL.createObjectURL(blob);
-  activeObjectUrl = url;
+  const voices = await loadVoices();
+  const voice = pickBestVoice(voices);
 
-  const audio = new Audio(url);
-  activeAudio = audio;
+  const chunks = splitIntoChunks(script, SPEECH_CHUNK_CHARS);
+  const wordCount = script.trim().split(/\s+/).filter(Boolean).length;
+  // Estimate duration at ~130 wpm (rate 0.9)
+  const totalDuration = (wordCount / 130) * 60;
 
-  audio.ontimeupdate = () => {
-    if (!isNaN(audio.duration)) {
-      callbacks.onProgress(audio.currentTime, audio.duration);
+  let chunkIdx = 0;
+  let stopped = false;
+  let paused = false;
+  let startTime = 0;
+  let elapsedAtPause = 0;
+  let volume = 1.0;
+
+  function speakNext(): void {
+    if (stopped || chunkIdx >= chunks.length) {
+      if (!stopped) callbacks.onEnded();
+      return;
     }
-  };
-  audio.onended = () => {
-    releaseActiveAudio();
-    callbacks.onEnded();
-  };
-  audio.onerror = () => {
-    releaseActiveAudio();
-    callbacks.onError('Playback error');
-  };
 
-  audio.play().catch((err: Error) => callbacks.onError(err.message));
+    const utt = new SpeechSynthesisUtterance(chunks[chunkIdx]);
+    if (voice) utt.voice = voice;
+    utt.rate = 0.9;
+    utt.pitch = 1.0;
+    utt.volume = volume;
+
+    if (chunkIdx === 0) {
+      utt.onstart = () => {
+        startTime = Date.now();
+        callbacks.onProgress(0, totalDuration);
+      };
+    }
+
+    utt.onboundary = () => {
+      if (paused || stopped) return;
+      const elapsed = elapsedAtPause + (Date.now() - startTime) / 1000;
+      callbacks.onProgress(Math.min(elapsed, totalDuration - 0.1), totalDuration);
+    };
+
+    utt.onend = () => {
+      if (stopped) return;
+      chunkIdx++;
+      speakNext();
+    };
+
+    utt.onerror = (e) => {
+      if (stopped || e.error === 'canceled' || e.error === 'interrupted') return;
+      callbacks.onError(e.error || 'Speech error');
+    };
+
+    window.speechSynthesis.speak(utt);
+  }
+
+  speakNext();
 
   return {
-    pause: () => audio.pause(),
-    resume: () => { audio.play().catch((e: Error) => callbacks.onError(e.message)); },
-    stop: () => { releaseActiveAudio(); callbacks.onEnded(); },
-    seek: (sec: number) => { audio.currentTime = sec; },
-    setVolume: (vol: number) => { audio.volume = Math.max(0, Math.min(1, vol)); },
+    pause: () => {
+      if (!paused) {
+        paused = true;
+        elapsedAtPause += (Date.now() - startTime) / 1000;
+        window.speechSynthesis.pause();
+      }
+    },
+    resume: () => {
+      if (paused) {
+        paused = false;
+        startTime = Date.now();
+        window.speechSynthesis.resume();
+      }
+    },
+    stop: () => {
+      stopped = true;
+      window.speechSynthesis.cancel();
+      callbacks.onEnded();
+    },
+    seek: () => { /* Web Speech API does not support seeking */ },
+    setVolume: (vol) => {
+      volume = Math.max(0, Math.min(1, vol));
+      // Applied to the next utterance chunk
+    },
   };
 }
-
