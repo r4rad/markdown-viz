@@ -3,7 +3,11 @@ import { createTabBar } from './TabBar';
 import { createEditor, getEditorView } from './Editor';
 import { createPreview } from './Preview';
 import { createStatusBar } from './StatusBar';
-import { createAudioPlayer, showAudioPlayer, updateAudioPlayerState } from './AudioPlayer';
+import {
+  createAudioPlayer, showAudioPlayer, hideAudioPlayer,
+  setPlayerPhase, updatePlayerProgress,
+} from './AudioPlayer';
+import type { AudioPlayerCallbacks } from './AudioPlayer';
 import { initDiagramModal } from './DiagramModal';
 import { initSettingsMenu, openSettingsMenu } from './SettingsMenu';
 import { getState, addTab, restoreState, toggleEditor, togglePreview, getActiveTab } from '../lib/state';
@@ -18,8 +22,14 @@ import { initAuthUI } from './AuthUI';
 import { shareDocument, loadSharedDocument, getShareIdFromURL, buildShareURL, triggerSystemShare, isSharingEnabled } from '../lib/share';
 import { computeChecksum, startCollaboration, stopCollaboration, getActiveSession } from '../lib/crdt';
 import { writeSyncLog } from '../lib/sync-log';
-import { generateAudioScript, isCacheValid, loadAudioCache, saveAudioCache, playAudioScript, preloadVoices } from '../lib/audio';
+import {
+  generateAudioScript, isCacheValid, loadAudioCache, saveAudioCache,
+  float32ToWav, loadCachedAudio, cacheAudio,
+} from '../lib/audio';
+import { initKokoro, synthesizeAudio, playWavBuffer } from '../lib/tts';
+import type { AudioControls } from '../lib/tts';
 import type { UserProfile } from '../types';
+
 
 export async function initApp(): Promise<void> {
   const app = document.getElementById('app')!;
@@ -55,7 +65,6 @@ export async function initApp(): Promise<void> {
   setupImport();
   setupKeyboardShortcuts();
   initFirebase();
-  preloadVoices();
   initAuthUI();
   setupAutoSync();
 
@@ -336,10 +345,25 @@ function createBetaBanner(): HTMLElement {
   return banner;
 }
 
+let activeAudioControls: AudioControls | null = null;
+
 async function handlePlayAudio(): Promise<void> {
   const tab = getActiveTab();
   if (!tab) return;
 
+  const docTitle = tab.name || 'Document';
+  const cbs: AudioPlayerCallbacks = {
+    onPlay:   () => { activeAudioControls?.resume(); setPlayerPhase('playing'); },
+    onPause:  () => { activeAudioControls?.pause();  setPlayerPhase('paused');  },
+    onStop:   () => { activeAudioControls?.stop();   hideAudioPlayer();         },
+    onSeek:   (s) => activeAudioControls?.seek(s),
+    onVolumeChange: (v) => activeAudioControls?.setVolume(v),
+    onClose:  () => { activeAudioControls?.stop();   hideAudioPlayer();         },
+  };
+
+  showAudioPlayer(docTitle, cbs);
+
+  // ── 1. Determine / generate text script ──────────────────────────────────
   const checksum = await computeChecksum(tab.content);
 
   let script: string;
@@ -353,18 +377,41 @@ async function handlePlayAudio(): Promise<void> {
       saveAudioCache(checksum, script, user?.uid ?? 'anonymous').catch(console.error);
     }
   }
+  if (!script) { hideAudioPlayer(); return; }
 
-  if (!script) return;
+  // ── 2. Check IndexedDB for already-synthesized WAV ────────────────────────
+  const wavBuf = await loadCachedAudio(checksum);
+  if (wavBuf) {
+    activeAudioControls = playWavBuffer(wavBuf, {
+      onProgress: (cur, dur) => updatePlayerProgress(cur, dur),
+      onEnded:    ()          => { setPlayerPhase('paused'); },
+      onError:    (msg)       => setPlayerPhase('error', { message: msg }),
+    });
+    setPlayerPhase('playing');
+    return;
+  }
 
-  const controls = playAudioScript(script, (state) => {
-    updateAudioPlayerState(state);
-  });
+  // ── 3. Synthesize with Kokoro (model loads lazily) ────────────────────────
+  try {
+    let result: { audio: Float32Array; sampleRate: number };
+    result = await synthesizeAudio(script, {
+      onModelProgress: (pct) => setPlayerPhase('loading', { progress: pct }),
+      onGenerating: ()       => setPlayerPhase('generating'),
+    });
 
-  showAudioPlayer(
-    () => controls.pause(),
-    () => controls.resume(),
-    () => controls.stop(),
-  );
+    const buffer = float32ToWav(result.audio, result.sampleRate);
+    cacheAudio(checksum, buffer.slice(0)).catch(console.error);
+
+    activeAudioControls = playWavBuffer(buffer, {
+      onProgress: (cur, dur) => updatePlayerProgress(cur, dur),
+      onEnded:    ()          => { setPlayerPhase('paused'); },
+      onError:    (msg)       => setPlayerPhase('error', { message: msg }),
+    });
+    setPlayerPhase('playing');
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : 'TTS error';
+    setPlayerPhase('error', { message: msg });
+  }
 }
 
 async function handleShareRequest(): Promise<void> {  if (!isSharingEnabled() || !isAuthenticated()) return;

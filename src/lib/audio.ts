@@ -323,87 +323,87 @@ export async function saveAudioCache(
 
 // ─── Voice selection ──────────────────────────────────────────────────────────
 
-let cachedVoice: SpeechSynthesisVoice | null = null;
+// (Removed: pickVoice, preloadVoices — replaced by Kokoro neural TTS in tts.ts)
 
-export function pickVoice(voices: SpeechSynthesisVoice[]): SpeechSynthesisVoice | null {
-  const english = voices.filter(v => v.lang.startsWith('en'));
-  const pool = english.length ? english : voices;
+// ─── WAV encoding ─────────────────────────────────────────────────────────────
 
-  const priority: Array<(v: SpeechSynthesisVoice) => boolean> = [
-    v => /Google.*English.*Female/i.test(v.name),
-    v => /Google.*English/i.test(v.name),
-    v => /Microsoft.*(Natural|Neural|Online)/i.test(v.name) && v.lang.startsWith('en'),
-    v => /Microsoft/i.test(v.name) && v.lang.startsWith('en'),
-    v => v.lang === 'en-US',
-    v => v.lang.startsWith('en'),
-  ];
+/** Convert a mono Float32Array PCM signal to a WAV ArrayBuffer (16-bit PCM). */
+export function float32ToWav(audio: Float32Array, sampleRate: number): ArrayBuffer {
+  const numChannels = 1;
+  const bitsPerSample = 16;
+  const dataSize = audio.length * 2; // 2 bytes per 16-bit sample
+  const buffer = new ArrayBuffer(44 + dataSize);
+  const view = new DataView(buffer);
 
-  for (const test of priority) {
-    const match = pool.find(test);
-    if (match) return match;
+  const writeStr = (off: number, s: string) => {
+    for (let i = 0; i < s.length; i++) view.setUint8(off + i, s.charCodeAt(i));
+  };
+
+  writeStr(0, 'RIFF');
+  view.setUint32(4, 36 + dataSize, true);
+  writeStr(8, 'WAVE');
+  writeStr(12, 'fmt ');
+  view.setUint32(16, 16, true);                                       // Subchunk1Size (PCM)
+  view.setUint16(20, 1, true);                                         // AudioFormat (PCM = 1)
+  view.setUint16(22, numChannels, true);
+  view.setUint32(24, sampleRate, true);
+  view.setUint32(28, sampleRate * numChannels * bitsPerSample / 8, true); // ByteRate
+  view.setUint16(32, numChannels * bitsPerSample / 8, true);           // BlockAlign
+  view.setUint16(34, bitsPerSample, true);
+  writeStr(36, 'data');
+  view.setUint32(40, dataSize, true);
+
+  let off = 44;
+  for (let i = 0; i < audio.length; i++) {
+    const s = Math.max(-1, Math.min(1, audio[i]));
+    view.setInt16(off, s < 0 ? s * 0x8000 : s * 0x7FFF, true);
+    off += 2;
   }
-  return pool[0] ?? null;
+  return buffer;
 }
 
-/** Call once at app startup to trigger browser voice loading. */
-export function preloadVoices(): void {
-  if (typeof window === 'undefined' || !window.speechSynthesis) return;
-  const tryCache = () => {
-    const voices = window.speechSynthesis.getVoices();
-    if (voices.length) { cachedVoice = pickVoice(voices); return true; }
-    return false;
-  };
-  if (!tryCache()) {
-    const handler = () => {
-      tryCache();
-      window.speechSynthesis.removeEventListener('voiceschanged', handler);
-    };
-    window.speechSynthesis.addEventListener('voiceschanged', handler);
+// ─── IndexedDB audio cache (WAV bytes, max 5 entries) ────────────────────────
+
+export const TTS_VOICE = 'af_bella';
+export const TTS_CACHE_VERSION = 1;
+const MAX_AUDIO_CACHE = 5;
+const AUDIO_MANIFEST_KEY = `audio-manifest-v${TTS_CACHE_VERSION}`;
+
+export function audioCacheKey(checksum: string): string {
+  return `tts-v${TTS_CACHE_VERSION}-${TTS_VOICE}-${checksum}`;
+}
+
+export async function loadCachedAudio(checksum: string): Promise<ArrayBuffer | null> {
+  try {
+    const { get } = await import('idb-keyval');
+    const key = audioCacheKey(checksum);
+    const buf = await get<ArrayBuffer>(key);
+    return buf ?? null;
+  } catch {
+    return null;
+  }
+}
+
+export async function cacheAudio(checksum: string, buffer: ArrayBuffer): Promise<void> {
+  try {
+    const { get, set, del } = await import('idb-keyval');
+    const key = audioCacheKey(checksum);
+    const manifest: string[] = (await get<string[]>(AUDIO_MANIFEST_KEY)) ?? [];
+
+    // LRU eviction: remove oldest entry when at capacity
+    if (manifest.length >= MAX_AUDIO_CACHE) {
+      const oldest = manifest.shift()!;
+      await del(oldest);
+    }
+    manifest.push(key);
+    await set(AUDIO_MANIFEST_KEY, manifest);
+    await set(key, buffer);
+  } catch {
+    // Cache write failing is non-fatal
   }
 }
 
 // ─── Playback ─────────────────────────────────────────────────────────────────
 
-export type AudioState = 'playing' | 'paused' | 'stopped';
-
-let activeUtterance: SpeechSynthesisUtterance | null = null;
-
-export function playAudioScript(
-  script: string,
-  onState: (state: AudioState) => void,
-): { pause: () => void; resume: () => void; stop: () => void } {
-  if (activeUtterance) {
-    window.speechSynthesis.cancel();
-    activeUtterance = null;
-  }
-
-  const utterance = new SpeechSynthesisUtterance(script);
-  utterance.rate = 0.92;
-  utterance.pitch = 1.0;
-  utterance.volume = 1.0;
-
-  // Use cached voice, or try picking one right now as fallback
-  const voice = cachedVoice ?? pickVoice(window.speechSynthesis.getVoices());
-  if (voice) utterance.voice = voice;
-
-  activeUtterance = utterance;
-
-  utterance.onstart = () => onState('playing');
-  utterance.onpause = () => onState('paused');
-  utterance.onresume = () => onState('playing');
-  utterance.onend = () => { activeUtterance = null; onState('stopped'); };
-  utterance.onerror = () => { activeUtterance = null; onState('stopped'); };
-
-  window.speechSynthesis.speak(utterance);
-
-  return {
-    pause: () => window.speechSynthesis.pause(),
-    resume: () => window.speechSynthesis.resume(),
-    stop: () => {
-      window.speechSynthesis.cancel();
-      activeUtterance = null;
-      onState('stopped');
-    },
-  };
-}
+// (Removed: playAudioScript, AudioState — replaced by playWavBuffer in tts.ts)
 
