@@ -26,6 +26,7 @@ import {
   generateAudioScript, isCacheValid, loadAudioCache, saveAudioCache,
 } from '../lib/audio';
 import { synthesizeAndPlay } from '../lib/tts';
+import { getGroqApiKey, generateSummaryWithGroq } from '../lib/groq-summarize';
 import type { AudioControls } from '../lib/tts';
 import type { UserProfile } from '../types';
 
@@ -345,38 +346,80 @@ function createBetaBanner(): HTMLElement {
 }
 
 let activeAudioControls: AudioControls | null = null;
+let playbackToken = 0; // incremented on each new play request to abort stale ones
 
 async function handlePlayAudio(): Promise<void> {
   const tab = getActiveTab();
   if (!tab) return;
 
+  // Cancel any in-progress playback
+  const token = ++playbackToken;
+  window.speechSynthesis.cancel();
+  activeAudioControls = null;
+
   const docTitle = tab.name || 'Document';
   const cbs: AudioPlayerCallbacks = {
     onPlay:   () => { activeAudioControls?.resume(); setPlayerPhase('playing'); },
     onPause:  () => { activeAudioControls?.pause();  setPlayerPhase('paused');  },
-    onStop:   () => { activeAudioControls?.stop();   hideAudioPlayer();         },
+    onStop:   () => {
+      activeAudioControls?.stop();
+      window.speechSynthesis.cancel();
+      playbackToken++; // invalidate any pending async work
+      hideAudioPlayer();
+    },
     onSeek:   (s) => activeAudioControls?.seek(s),
     onVolumeChange: (v) => activeAudioControls?.setVolume(v),
-    onClose:  () => { activeAudioControls?.stop();   hideAudioPlayer();         },
+    onClose:  () => {
+      activeAudioControls?.stop();
+      window.speechSynthesis.cancel();
+      playbackToken++; // invalidate any pending async work
+      hideAudioPlayer();
+    },
   };
 
   showAudioPlayer(docTitle, cbs);
 
   // ── 1. Determine / generate text script ──────────────────────────────────
   const checksum = await computeChecksum(tab.content);
+  if (token !== playbackToken) return; // aborted
+
+  const groqKey = getGroqApiKey();
+  const preferGroq = !!groqKey;
 
   let script: string;
+  let generatorKind: 'extractive' | 'groq' = 'extractive';
+
   const cached = await loadAudioCache(checksum);
-  if (isCacheValid(cached, checksum)) {
+  if (token !== playbackToken) return;
+
+  if (isCacheValid(cached, checksum, preferGroq)) {
     script = cached!.script;
-  } else {
-    script = generateAudioScript(tab.content);
+    generatorKind = cached!.generatorKind ?? 'extractive';
+  } else if (groqKey) {
+    setPlayerPhase('generating');
+    try {
+      script = await generateSummaryWithGroq(tab.content, groqKey);
+      generatorKind = 'groq';
+    } catch (err) {
+      console.warn('[audio] Groq failed, falling back to extractive:', err);
+      script = generateAudioScript(tab.content);
+      generatorKind = 'extractive';
+    }
+    if (token !== playbackToken) return;
     if (script && isAuthenticated()) {
       const user = getCurrentUser();
-      saveAudioCache(checksum, script, user?.uid ?? 'anonymous').catch(console.error);
+      saveAudioCache(checksum, script, user?.uid ?? 'anonymous', generatorKind).catch(console.error);
+    }
+  } else {
+    script = generateAudioScript(tab.content);
+    if (token !== playbackToken) return;
+    if (script && isAuthenticated()) {
+      const user = getCurrentUser();
+      saveAudioCache(checksum, script, user?.uid ?? 'anonymous', 'extractive').catch(console.error);
     }
   }
-  if (!script) { hideAudioPlayer(); return; }
+
+  if (!script || token !== playbackToken) { hideAudioPlayer(); return; }
 
   // ── 2. Speak via Web Speech API (instant, no model download) ─────────────
   try {
@@ -385,6 +428,7 @@ async function handlePlayAudio(): Promise<void> {
       onEnded:    ()          => { setPlayerPhase('paused'); },
       onError:    (msg)       => setPlayerPhase('error', { message: msg }),
     });
+    if (token !== playbackToken) { activeAudioControls.stop(); return; }
     setPlayerPhase('playing');
   } catch (err) {
     const msg = err instanceof Error ? err.message : 'TTS error';

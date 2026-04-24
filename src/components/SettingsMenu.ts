@@ -14,6 +14,7 @@ import {
 } from '../lib/auth';
 import { restoreState } from '../lib/state';
 import { openFeedbackModal } from './FeedbackModal';
+import { getGroqApiKey, setGroqApiKey, clearGroqApiKey } from '../lib/groq-summarize';
 import type { UserProfile } from '../types';
 
 let overlayEl: HTMLElement | null = null;
@@ -317,6 +318,51 @@ function renderPanelContent(): void {
   }
   themeSection.appendChild(darkGrid);
   content.appendChild(themeSection);
+
+  // ─── AI Audio Section ───
+  const aiAudioSection = createSection('AI Audio (Groq)');
+  const aiDesc = document.createElement('div');
+  aiDesc.className = 'settings-sublabel';
+  aiDesc.style.marginBottom = '8px';
+  aiDesc.textContent = 'Add a free Groq API key for human-quality audio summaries instead of robotic text-to-speech.';
+  aiAudioSection.appendChild(aiDesc);
+
+  const apiKeyRow = document.createElement('div');
+  apiKeyRow.className = 'settings-rename-row';
+  const apiKeyInput = document.createElement('input');
+  apiKeyInput.type = 'password';
+  apiKeyInput.placeholder = 'gsk_…';
+  apiKeyInput.className = 'settings-rename-input';
+  apiKeyInput.value = getGroqApiKey() || '';
+  const saveKeyBtn = document.createElement('button');
+  saveKeyBtn.className = 'settings-action-btn';
+  saveKeyBtn.innerHTML = `${icon('save')}<span>Save</span>`;
+  saveKeyBtn.addEventListener('click', () => {
+    const val = apiKeyInput.value.trim();
+    if (val) {
+      setGroqApiKey(val);
+      saveKeyBtn.innerHTML = `${icon('save')}<span>Saved ✓</span>`;
+      setTimeout(() => { saveKeyBtn.innerHTML = `${icon('save')}<span>Save</span>`; }, 1500);
+    } else {
+      clearGroqApiKey();
+      saveKeyBtn.innerHTML = `${icon('save')}<span>Cleared</span>`;
+      setTimeout(() => { saveKeyBtn.innerHTML = `${icon('save')}<span>Save</span>`; }, 1500);
+    }
+  });
+  apiKeyInput.addEventListener('keydown', (ke) => { if (ke.key === 'Enter') saveKeyBtn.click(); });
+  apiKeyRow.append(apiKeyInput, saveKeyBtn);
+  aiAudioSection.appendChild(apiKeyRow);
+
+  const groqLink = document.createElement('a');
+  groqLink.href = 'https://console.groq.com/keys';
+  groqLink.target = '_blank';
+  groqLink.rel = 'noopener noreferrer';
+  groqLink.className = 'settings-sublabel';
+  groqLink.style.display = 'block';
+  groqLink.style.marginTop = '6px';
+  groqLink.textContent = '→ Get a free key at console.groq.com';
+  aiAudioSection.appendChild(groqLink);
+  content.appendChild(aiAudioSection);
 
   // ─── Feedback ───
   const feedbackSection = createSection('Feedback');

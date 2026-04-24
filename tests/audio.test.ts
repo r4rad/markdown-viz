@@ -333,3 +333,93 @@ describe('splitIntoChunks()', () => {
     expect(result[0]).toBe('Short text.');
   });
 });
+
+// ─── sanitizeForSpeech() ─────────────────────────────────────────────────────
+
+describe('sanitizeForSpeech()', () => {
+  it('strips email addresses', async () => {
+    const { sanitizeForSpeech } = await import('../src/lib/audio');
+    const result = sanitizeForSpeech('Contact user@example.com for help.');
+    expect(result).not.toMatch(/@/);
+  });
+
+  it('strips https URLs', async () => {
+    const { sanitizeForSpeech } = await import('../src/lib/audio');
+    const result = sanitizeForSpeech('See https://github.com/example for docs.');
+    expect(result).not.toContain('https://');
+    expect(result).not.toContain('github.com');
+  });
+
+  it('replaces forward and back slashes with spaces', async () => {
+    const { sanitizeForSpeech } = await import('../src/lib/audio');
+    const result = sanitizeForSpeech('Run npm/install or visit src/components.');
+    expect(result).not.toContain('/');
+  });
+
+  it('keeps plain prose unchanged', async () => {
+    const { sanitizeForSpeech } = await import('../src/lib/audio');
+    const prose = 'This is a normal sentence about software development.';
+    expect(sanitizeForSpeech(prose)).toBe(prose);
+  });
+
+  it('returns non-empty string for heavily technical content', async () => {
+    const { sanitizeForSpeech } = await import('../src/lib/audio');
+    const technical = 'npm install https://example.com user@test.com';
+    expect(sanitizeForSpeech(technical).trim().length).toBeGreaterThan(0);
+  });
+
+  it('strips remaining backticks and inline code', async () => {
+    const { sanitizeForSpeech } = await import('../src/lib/audio');
+    const result = sanitizeForSpeech('Use `npm install` now.');
+    expect(result).not.toContain('`');
+    expect(result).not.toContain('npm install');
+  });
+
+  it('strips markdown characters like # * _', async () => {
+    const { sanitizeForSpeech } = await import('../src/lib/audio');
+    const result = sanitizeForSpeech('## Heading **bold** _italic_');
+    expect(result).not.toContain('#');
+    expect(result).not.toContain('**');
+    expect(result).not.toContain('_');
+  });
+});
+
+// ─── isCacheValid() with generatorKind ───────────────────────────────────────
+
+describe('isCacheValid() with generatorKind', () => {
+  it('rejects extractive cache when preferGroq is true', async () => {
+    const { isCacheValid } = await import('../src/lib/audio');
+    const cache = {
+      checksum: 'abc', script: 's', generatedAt: 0, generatedBy: 'u',
+      generatorVersion: AUDIO_GENERATOR_VERSION, generatorKind: 'extractive' as const,
+    };
+    expect(isCacheValid(cache, 'abc', true)).toBe(false);
+  });
+
+  it('accepts groq cache when preferGroq is true', async () => {
+    const { isCacheValid } = await import('../src/lib/audio');
+    const cache = {
+      checksum: 'abc', script: 's', generatedAt: 0, generatedBy: 'u',
+      generatorVersion: AUDIO_GENERATOR_VERSION, generatorKind: 'groq' as const,
+    };
+    expect(isCacheValid(cache, 'abc', true)).toBe(true);
+  });
+
+  it('accepts any valid cache when preferGroq is false', async () => {
+    const { isCacheValid } = await import('../src/lib/audio');
+    const cache = {
+      checksum: 'abc', script: 's', generatedAt: 0, generatedBy: 'u',
+      generatorVersion: AUDIO_GENERATOR_VERSION, generatorKind: 'extractive' as const,
+    };
+    expect(isCacheValid(cache, 'abc', false)).toBe(true);
+  });
+
+  it('rejects old cache without generatorKind when preferGroq is true', async () => {
+    const { isCacheValid } = await import('../src/lib/audio');
+    const cache = {
+      checksum: 'abc', script: 's', generatedAt: 0, generatedBy: 'u',
+      generatorVersion: AUDIO_GENERATOR_VERSION,
+    } as Parameters<typeof isCacheValid>[0];
+    expect(isCacheValid(cache, 'abc', true)).toBe(false);
+  });
+});

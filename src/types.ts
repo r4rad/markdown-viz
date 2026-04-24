@@ -88,7 +88,7 @@ export interface SyncLogEntry {
 }
 
 // ─── Audio Cache ───
-export const AUDIO_GENERATOR_VERSION = 2;
+export const AUDIO_GENERATOR_VERSION = 3;
 
 export interface AudioCache {
   checksum: string;           // SHA-256 of content that generated this script
@@ -96,4 +96,5 @@ export interface AudioCache {
   generatedAt: number;
   generatedBy: string;        // userId
   generatorVersion: number;   // bump when generateAudioScript logic changes
+  generatorKind: 'extractive' | 'groq'; // source of the script
 }

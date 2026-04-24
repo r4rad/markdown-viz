@@ -75,7 +75,9 @@ function cleanInline(text: string): string {
     .replace(/__([^_]+)__/g, '$1')
     .replace(/\*([^*]+)\*/g, '$1')
     .replace(/_([^_]+)_/g, '$1')
-    .replace(/`([^`]+)`/g, '$1')
+    .replace(/`[^`]+`/g, '')   // strip inline code text entirely — sounds robotic in TTS
+    .replace(/https?:\/\/[^\s,)\]'"]+/g, '')  // strip URLs
+    .replace(/\b[\w.!#$%+-]+@[\w-]+\.[\w.]{2,}\b/g, '')  // strip emails
     .trim();
 }
 
@@ -311,9 +313,12 @@ export function generateAudioScript(content: string): string {
 
 // ─── Cache helpers ────────────────────────────────────────────────────────────
 
-export function isCacheValid(cache: AudioCache | null, checksum: string): boolean {
+export function isCacheValid(cache: AudioCache | null, checksum: string, preferGroq = false): boolean {
   if (!cache) return false;
-  return cache.checksum === checksum && cache.generatorVersion === AUDIO_GENERATOR_VERSION;
+  if (cache.checksum !== checksum) return false;
+  if (cache.generatorVersion !== AUDIO_GENERATOR_VERSION) return false;
+  if (preferGroq && cache.generatorKind !== 'groq') return false;
+  return true;
 }
 
 export async function loadAudioCache(checksum: string): Promise<AudioCache | null> {
@@ -328,6 +333,7 @@ export async function saveAudioCache(
   checksum: string,
   script: string,
   userId: string,
+  generatorKind: 'extractive' | 'groq' = 'extractive',
 ): Promise<void> {
   const db = getFirestore(getApp());
   const ref = doc(db, 'audioCache', checksum);
@@ -337,6 +343,7 @@ export async function saveAudioCache(
     generatedAt: Date.now(),
     generatedBy: userId,
     generatorVersion: AUDIO_GENERATOR_VERSION,
+    generatorKind,
   };
   await setDoc(ref, entry);
 }
@@ -426,6 +433,27 @@ export async function cacheAudio(checksum: string, buffer: ArrayBuffer): Promise
 // ─── Playback ─────────────────────────────────────────────────────────────────
 
 // (Removed: playAudioScript, AudioState — replaced by playWavBuffer in tts.ts)
+
+// ─── Text Sanitization for TTS ───────────────────────────────────────────────
+
+/**
+ * Sanitize text for speech synthesis — removes technical artifacts that sound
+ * robotic or nonsensical when read aloud (emails, URLs, inline code, markdown).
+ * Pure function: no browser APIs, fully testable.
+ */
+export function sanitizeForSpeech(text: string): string {
+  const sanitized = text
+    .replace(/`[^`]*`/g, '')                              // inline code
+    .replace(/\b[\w.!#$%+-]+@[\w-]+\.[\w.]{2,}\b/g, '')  // emails
+    .replace(/https?:\/\/[^\s,)\]'"]+/g, '')              // https/http URLs
+    .replace(/[*_#>~|`]/g, '')                            // markdown chars
+    .replace(/[/\\]/g, ' ')                               // slashes → spaces
+    .replace(/[<>{}[\]]/g, '')                            // brackets
+    .replace(/\s{2,}/g, ' ')
+    .trim();
+  // Guard: if sanitization wiped everything out entirely, return original
+  return sanitized.length >= 5 ? sanitized : text.trim();
+}
 
 // ─── Text chunking for TTS ────────────────────────────────────────────────────
 
