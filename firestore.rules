@@ -9,6 +9,11 @@ service cloud.firestore {
       match /files/{fileId} {
         allow read, write: if request.auth != null && request.auth.uid == userId;
       }
+
+      // Personal sync log
+      match /syncLog/{entryId} {
+        allow read, write: if request.auth != null && request.auth.uid == userId;
+      }
     }
 
     // Shared documents: anyone can read, only the owner can write/update/delete
@@ -18,6 +23,43 @@ service cloud.firestore {
                     && request.resource.data.ownerId == request.auth.uid;
       allow update, delete: if request.auth != null
                             && resource.data.ownerId == request.auth.uid;
+    }
+
+    // Collaborative documents (CRDT)
+    match /collaborativeDocs/{docId} {
+      allow read: if request.auth != null
+                  && (resource.data.ownerId == request.auth.uid
+                      || request.auth.uid in resource.data.collaborators);
+      allow create: if request.auth != null
+                    && request.resource.data.ownerId == request.auth.uid;
+      allow update: if request.auth != null
+                    && (resource.data.ownerId == request.auth.uid
+                        || request.auth.uid in resource.data.collaborators);
+      allow delete: if request.auth != null
+                    && resource.data.ownerId == request.auth.uid;
+
+      // CRDT incremental updates
+      match /updates/{updateId} {
+        allow read: if request.auth != null
+                    && (get(/databases/$(database)/documents/collaborativeDocs/$(docId)).data.ownerId == request.auth.uid
+                        || request.auth.uid in get(/databases/$(database)/documents/collaborativeDocs/$(docId)).data.collaborators);
+        allow create: if request.auth != null
+                      && (get(/databases/$(database)/documents/collaborativeDocs/$(docId)).data.ownerId == request.auth.uid
+                          || request.auth.uid in get(/databases/$(database)/documents/collaborativeDocs/$(docId)).data.collaborators);
+      }
+
+      // Collaborative sync log
+      match /syncLog/{entryId} {
+        allow read: if request.auth != null
+                    && (get(/databases/$(database)/documents/collaborativeDocs/$(docId)).data.ownerId == request.auth.uid
+                        || request.auth.uid in get(/databases/$(database)/documents/collaborativeDocs/$(docId)).data.collaborators);
+        allow create: if request.auth != null;
+      }
+    }
+
+    // Audio cache keyed by content checksum
+    match /audioCache/{checksum} {
+      allow read, write: if request.auth != null;
     }
 
     // Feedback collection: anyone can submit (anonymous or logged-in)
