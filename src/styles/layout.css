@@ -8,6 +8,68 @@
   color: var(--text-primary);
 }
 
+/* ─── Audio Player Bar ─── */
+.audio-player {
+  position: fixed;
+  bottom: 32px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 14px;
+  background: var(--bg-toolbar);
+  border: 1px solid var(--border-primary);
+  border-radius: 24px;
+  box-shadow: 0 4px 16px rgba(0,0,0,0.18);
+  z-index: 200;
+  font-size: 13px;
+  color: var(--text-primary);
+  transition: opacity 0.2s, transform 0.2s;
+}
+
+.audio-player-hidden {
+  opacity: 0;
+  pointer-events: none;
+  transform: translateX(-50%) translateY(12px);
+}
+
+.audio-player-controls {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.audio-ctrl-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border: none;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--text-primary);
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.audio-ctrl-btn:hover {
+  background: var(--bg-hover);
+}
+
+/* ─── Collab indicator ─── */
+.collab-badge {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--success, #22c55e);
+  margin-left: 2px;
+  vertical-align: middle;
+}
+
+
 /* ─── Toolbar ─── */
 .toolbar {
   display: flex;
