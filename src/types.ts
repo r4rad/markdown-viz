@@ -88,7 +88,7 @@ export interface SyncLogEntry {
 }
 
 // ─── Audio Cache ───
-export const AUDIO_GENERATOR_VERSION = 1;
+export const AUDIO_GENERATOR_VERSION = 2;
 
 export interface AudioCache {
   checksum: string;           // SHA-256 of content that generated this script
