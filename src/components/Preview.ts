@@ -4,7 +4,7 @@ import { getActiveTab, getState, setPreviewScroll, updateTabContent } from '../l
 import { on, emit } from '../lib/events';
 import { htmlToMarkdown } from '../lib/html-to-markdown';
 import { isValidDiagramType, type DiagramType } from '../lib/draw-command';
-import { openDiagramEditPanel, applyDiagramEdit } from './DiagramEditPanel';
+import { openDiagramEditPanel, openDiagramInsertPanel, applyDiagramEdit } from './DiagramEditPanel';
 
 let previewEl: HTMLElement;
 let contentEl: HTMLElement;
@@ -454,6 +454,24 @@ export function createPreview(): HTMLElement {
   contentEl.className = 'preview-content markdown-body';
   contentEl.setAttribute('contenteditable', 'false');
   previewEl.appendChild(contentEl);
+
+  // ── /draw FAB — insert a new diagram from the preview pane ────────────────
+  const drawFab = document.createElement('button');
+  drawFab.className = 'preview-draw-fab';
+  drawFab.title = 'Insert a diagram (/draw)';
+  drawFab.innerHTML = '📊 /draw';
+  drawFab.setAttribute('aria-label', 'Insert diagram');
+  drawFab.addEventListener('click', (e) => {
+    e.stopPropagation();
+    openDiagramInsertPanel(previewEl, (fence) => {
+      const tab = getActiveTab();
+      if (!tab) return;
+      const updated = tab.content.trimEnd() + '\n\n' + fence + '\n';
+      updateTabContent(tab.id, updated);
+      emit('set-editor-content', updated);
+    });
+  });
+  previewEl.appendChild(drawFab);
 
   configureMarked();
 

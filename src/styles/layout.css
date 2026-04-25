@@ -422,6 +422,7 @@
 .preview-pane {
   background: var(--bg-preview);
   border-left: 1px solid var(--border-primary);
+  position: relative;
 }
 
 .pane-hidden {
@@ -2086,5 +2087,59 @@
 
 .cl-dismiss-btn {
   flex-shrink: 0;
+}
+
+/* ─── Preview /draw FAB ─── */
+.preview-draw-fab {
+  position: absolute;
+  bottom: 16px;
+  right: 20px;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 14px;
+  border-radius: 20px;
+  border: 1px solid var(--border-primary);
+  background: var(--bg-toolbar);
+  color: var(--text-primary);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.18);
+  transition: background 0.15s, box-shadow 0.15s, transform 0.1s;
+  white-space: nowrap;
+  user-select: none;
+}
+
+.preview-draw-fab:hover {
+  background: var(--bg-hover);
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.25);
+  transform: translateY(-1px);
+}
+
+.preview-draw-fab:active {
+  transform: translateY(0);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.15);
+}
+
+/* ─── Diagram insert overlay ─── */
+.diagram-insert-overlay {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  z-index: 20;
+  background: var(--bg-toolbar);
+  border-top: 2px solid var(--accent);
+  box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.2);
+  max-height: 60vh;
+  overflow-y: auto;
+}
+
+.diagram-insert-overlay .diagram-edit-panel {
+  box-shadow: none;
+  border: none;
+  border-radius: 0;
 }
 
