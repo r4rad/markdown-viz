@@ -2090,12 +2090,13 @@
 }
 
 /* ─── Preview /draw FAB ─── */
+/* FAB visibility is controlled by JS (style.display), shown only in edit mode */
 .preview-draw-fab {
   position: absolute;
-  bottom: 16px;
-  right: 20px;
+  bottom: calc(16px + env(safe-area-inset-bottom, 0px));
+  right: calc(20px + env(safe-area-inset-right, 0px));
   z-index: 10;
-  display: flex;
+  display: none; /* JS shows this when edit mode is active */
   align-items: center;
   gap: 6px;
   padding: 8px 14px;
@@ -2110,6 +2111,7 @@
   transition: background 0.15s, box-shadow 0.15s, transform 0.1s;
   white-space: nowrap;
   user-select: none;
+  touch-action: manipulation;
 }
 
 .preview-draw-fab:hover {
@@ -2121,6 +2123,11 @@
 .preview-draw-fab:active {
   transform: translateY(0);
   box-shadow: 0 1px 4px rgba(0, 0, 0, 0.15);
+}
+
+/* Extra bottom padding so the FAB doesn't overlap the last paragraph */
+.preview-pane.preview-edit-mode .preview-content {
+  padding-bottom: calc(64px + env(safe-area-inset-bottom, 0px));
 }
 
 /* ─── Diagram insert overlay ─── */
@@ -2141,5 +2148,47 @@
   box-shadow: none;
   border: none;
   border-radius: 0;
+}
+
+/* ─── Mobile: FAB and overlay responsive adjustments ─── */
+@media (max-width: 768px) {
+  .preview-draw-fab {
+    bottom: calc(12px + env(safe-area-inset-bottom, 0px));
+    right: calc(12px + env(safe-area-inset-right, 0px));
+    padding: 10px 16px;
+    font-size: 14px;
+    border-radius: 24px;
+  }
+
+  .diagram-insert-overlay {
+    max-height: 80vh;
+  }
+
+  .preview-pane.preview-edit-mode .preview-content {
+    padding-bottom: calc(72px + env(safe-area-inset-bottom, 0px));
+  }
+}
+
+@media (max-width: 480px) {
+  .preview-draw-fab {
+    left: 50%;
+    right: auto;
+    transform: translateX(-50%);
+    bottom: calc(12px + env(safe-area-inset-bottom, 0px));
+    min-width: 140px;
+    justify-content: center;
+  }
+
+  .preview-draw-fab:hover {
+    transform: translateX(-50%) translateY(-1px);
+  }
+
+  .preview-draw-fab:active {
+    transform: translateX(-50%) translateY(0);
+  }
+
+  .diagram-insert-overlay {
+    max-height: 92vh;
+  }
 }
 
