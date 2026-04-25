@@ -11,7 +11,8 @@ let contentEl: HTMLElement;
 let renderTimer: ReturnType<typeof setTimeout> | null = null;
 let previewEditable = false;
 let drawFabEl: HTMLButtonElement | null = null;
-let cursorAnchorText = '';
+/** Fractional position (0–1) of the cursor in the rendered preview text. -1 = unknown. */
+let cursorInsertRatio = -1;
 const headingSlugCounts = new Map<string, number>();
 let highlightModule: typeof import('highlight.js') | null = null;
 let katexModule: typeof import('katex') | null = null;
@@ -442,103 +443,90 @@ export function setPreviewEditable(editable: boolean): void {
   }
   if (drawFabEl) drawFabEl.style.display = editable ? 'flex' : 'none';
   if (previewEl) previewEl.classList.toggle('preview-edit-mode', editable);
-  if (!editable) cursorAnchorText = '';
+  if (!editable) cursorInsertRatio = -1;
   emit('preview-mode-changed', editable);
 }
 
 // ─── Cursor-aware diagram insertion helpers ───────────────────────────────────
 
-/** Records the text content of the top-level block under the cursor. */
+/** Records the fractional cursor position (0–1) in rendered preview text. */
 function updateCursorAnchor(): void {
   if (!previewEditable) return;
   const sel = window.getSelection();
-  if (!sel?.anchorNode) { cursorAnchorText = ''; return; }
-
-  let node: Node | null = sel.anchorNode;
-  // Handle: caret placed directly on contentEl (between blocks)
-  if (node === contentEl) {
-    const idx = Math.max(0, Math.min(sel.anchorOffset, contentEl.children.length - 1));
-    node = contentEl.children[idx] ?? null;
-  } else {
-    while (node && node.parentNode !== contentEl) node = node.parentNode;
+  if (!sel?.anchorNode) { cursorInsertRatio = -1; return; }
+  try {
+    const range = document.createRange();
+    range.setStart(contentEl, 0);
+    range.setEnd(sel.anchorNode, sel.anchorOffset);
+    const before = range.toString().length;
+    const total = (contentEl.textContent ?? '').length;
+    cursorInsertRatio = total > 0 ? before / total : 0;
+  } catch {
+    cursorInsertRatio = -1;
   }
-
-  if (!node || !(node instanceof HTMLElement) || !contentEl.contains(node)) {
-    cursorAnchorText = '';
-    return;
-  }
-  cursorAnchorText = node.textContent?.replace(/\s+/g, ' ').trim().slice(0, 60) ?? '';
 }
 
 /**
- * Finds where in `markdown` to insert a new block after the block containing
- * `anchorText`. Returns the character index to insert at, or -1 on failure.
+ * Finds where in `markdown` to insert a new block, based on the fractional
+ * cursor position `ratio` (0 = start, 1 = end). Returns a character index.
  */
-function findInsertPosition(markdown: string, anchorText: string): number {
-  if (!anchorText || anchorText.length < 3) return -1;
+function findInsertPosition(markdown: string, ratio: number): number {
+  if (markdown.length === 0) return 0;
+  if (ratio < 0) return markdown.length;
 
-  // Try progressively shorter prefixes to handle inline markdown syntax
-  // (e.g. "bold text" is in "**bold text**"; 8-char minimum avoids false positives)
-  let matchIdx = -1;
-  for (let len = Math.min(anchorText.length, 60); len >= 8; len -= 8) {
-    matchIdx = markdown.indexOf(anchorText.slice(0, len));
-    if (matchIdx >= 0) break;
-  }
-  if (matchIdx < 0) return -1;
+  const approxPos = ratio >= 1 ? markdown.length : Math.floor(ratio * markdown.length);
 
-  // Determine if matchIdx is inside a fenced code block
+  // Determine fence state at approxPos by scanning from start
   let inFence = false;
   let fenceMarker = '';
-  for (const line of markdown.slice(0, matchIdx).split('\n')) {
+  for (const line of markdown.slice(0, approxPos).split('\n')) {
     if (!inFence) {
       const m = line.match(/^(`{3,}|~{3,})/);
       if (m) { inFence = true; fenceMarker = m[1]; }
     } else if (line.startsWith(fenceMarker)) {
-      inFence = false;
+      inFence = false; fenceMarker = '';
     }
   }
 
-  // Walk forward from matchIdx to the end of the current block
-  let pos = matchIdx;
+  // Walk forward from the start of the line containing approxPos
+  let pos = markdown.lastIndexOf('\n', approxPos - 1) + 1;
+
   while (pos < markdown.length) {
     const nl = markdown.indexOf('\n', pos);
-    if (nl < 0) { pos = markdown.length; break; }
-    const line = markdown.slice(pos, nl);
+    const eol = nl < 0 ? markdown.length : nl;
+    const line = markdown.slice(pos, eol);
 
     if (!inFence) {
       const fm = line.match(/^(`{3,}|~{3,})/);
       if (fm) {
-        inFence = true;
-        fenceMarker = fm[1];
+        inFence = true; fenceMarker = fm[1];
       } else if (line.trim() === '') {
-        // Blank line = end of block; skip all consecutive blank lines
-        let nextPos = nl + 1;
+        // Blank line = end of current block; skip all consecutive blanks
+        let nextPos = eol + 1;
         while (nextPos < markdown.length && markdown[nextPos] === '\n') nextPos++;
         return nextPos;
       }
     } else if (line.startsWith(fenceMarker)) {
-      // End of fenced code block
-      inFence = false;
-      let nextPos = nl + 1;
+      inFence = false; fenceMarker = '';
+      let nextPos = eol + 1;
       while (nextPos < markdown.length && markdown[nextPos] === '\n') nextPos++;
       return nextPos;
     }
+
+    if (nl < 0) break;
     pos = nl + 1;
   }
-  return pos; // end of document
+  return markdown.length;
 }
 
 /** Builds the updated markdown string with `fence` spliced in at cursor position. */
-function buildInsertContent(content: string, fence: string, anchorText: string): string {
-  const insertPos = findInsertPosition(content, anchorText);
-  if (insertPos < 0 || insertPos >= content.length) {
-    return content.trimEnd() + '\n\n' + fence + '\n';
-  }
+function buildInsertContent(content: string, fence: string, ratio: number): string {
+  const insertPos = findInsertPosition(content, ratio);
   const before = content.slice(0, insertPos);
   const after = content.slice(insertPos);
   const sepBefore = before.endsWith('\n\n') ? '' : before.endsWith('\n') ? '\n' : '\n\n';
-  const sepAfter = after.startsWith('\n') ? '' : '\n\n';
-  return before + sepBefore + fence + sepAfter + after;
+  const sepAfter = after === '' ? '\n' : after.startsWith('\n') ? '' : '\n\n';
+  return before + sepBefore + fence + '\n' + sepAfter + after;
 }
 
 export function isPreviewEditable(): boolean {
@@ -568,7 +556,7 @@ export function createPreview(): HTMLElement {
     openDiagramInsertPanel(previewEl, (fence) => {
       const tab = getActiveTab();
       if (!tab) return;
-      const updated = buildInsertContent(tab.content, fence, cursorAnchorText);
+      const updated = buildInsertContent(tab.content, fence, cursorInsertRatio);
       updateTabContent(tab.id, updated);
       emit('set-editor-content', updated);
     });
@@ -592,6 +580,38 @@ export function createPreview(): HTMLElement {
   let ignoreNextRender = false;
   contentEl.addEventListener('input', () => {
     if (!previewEditable) return;
+
+    // Detect "/draw" typed in the preview — open the insert panel at cursor
+    const sl = window.getSelection();
+    if (sl?.anchorNode?.nodeType === Node.TEXT_NODE) {
+      const tn = sl.anchorNode as Text;
+      const off = sl.anchorOffset;
+      const beforeCursor = (tn.textContent ?? '').slice(0, off);
+      if (beforeCursor.endsWith('/draw')) {
+        // Remove the "/draw" text from the DOM text node
+        tn.textContent =
+          (tn.textContent ?? '').slice(0, off - 5) +
+          (tn.textContent ?? '').slice(off);
+        // Reposition caret
+        const r = document.createRange();
+        r.setStart(tn, Math.max(0, off - 5));
+        r.collapse(true);
+        sl.removeAllRanges();
+        sl.addRange(r);
+        // Cancel WYSIWYG debounce so the removed text doesn't get synced back
+        if (wysiwygTimer) { clearTimeout(wysiwygTimer); wysiwygTimer = null; }
+        updateCursorAnchor();
+        openDiagramInsertPanel(previewEl, (fence) => {
+          const tab = getActiveTab();
+          if (!tab) return;
+          const updated = buildInsertContent(tab.content, fence, cursorInsertRatio);
+          updateTabContent(tab.id, updated);
+          emit('set-editor-content', updated);
+        });
+        return;
+      }
+    }
+
     if (wysiwygTimer) clearTimeout(wysiwygTimer);
     wysiwygTimer = setTimeout(() => {
       const tab = getActiveTab();
@@ -643,7 +663,7 @@ export function createPreview(): HTMLElement {
   });
   on('active-tab-changed', () => {
     ignoreNextRender = false;
-    cursorAnchorText = ''; // stale cursor from previous tab
+    cursorInsertRatio = -1; // stale cursor from previous tab
     const tab = getActiveTab();
     if (tab && contentEl) {
       // Schedule render then restore saved scroll position once the DOM settles
@@ -651,7 +671,7 @@ export function createPreview(): HTMLElement {
       renderTimer = setTimeout(async () => {
         if (tab) {
           await renderContent(tab.content);
-          cursorAnchorText = ''; // also reset after render
+          cursorInsertRatio = -1; // also reset after render
           // Restore scroll after render completes
           requestAnimationFrame(() => {
             if (contentEl && tab) contentEl.scrollTop = tab.scrollPreview ?? 0;
