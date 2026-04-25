@@ -27,6 +27,7 @@ import {
 } from '../lib/audio';
 import { synthesizeAndPlay } from '../lib/tts';
 import { getGroqApiKey, generateSummaryWithGroq } from '../lib/groq-summarize';
+import { showChangelogIfNew } from './ChangelogModal';
 import type { AudioControls } from '../lib/tts';
 import type { UserProfile } from '../types';
 
@@ -70,6 +71,9 @@ export async function initApp(): Promise<void> {
 
   // Check if we arrived via a shared document URL
   await loadSharedDocFromURL();
+
+  // Show changelog popup if this is a new version the user hasn't seen
+  showChangelogIfNew();
 
   // Wire up events
   on('import-file', () => openFilePicker());
