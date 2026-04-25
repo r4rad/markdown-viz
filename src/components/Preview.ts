@@ -3,6 +3,8 @@ import DOMPurify from 'dompurify';
 import { getActiveTab, getState, setPreviewScroll, updateTabContent } from '../lib/state';
 import { on, emit } from '../lib/events';
 import { htmlToMarkdown } from '../lib/html-to-markdown';
+import { isValidDiagramType, type DiagramType } from '../lib/draw-command';
+import { openDiagramEditPanel, applyDiagramEdit } from './DiagramEditPanel';
 
 let previewEl: HTMLElement;
 let contentEl: HTMLElement;
@@ -251,6 +253,32 @@ function addDiagramToolbar(container: HTMLElement, source: string): void {
   const toolbar = document.createElement('div');
   toolbar.className = 'diagram-toolbar';
 
+  // ── Edit button (Confluence-style inline edit panel) ──
+  const editBtn = document.createElement('button');
+  editBtn.textContent = '✏️ Edit';
+  editBtn.title = 'Edit diagram inline';
+  editBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    const rawType = (container.dataset.diagram ?? 'mermaid') as string;
+    const diagramType: DiagramType = isValidDiagramType(rawType) ? rawType : 'mermaid';
+    const encodedSource = container.dataset.source ?? '';
+    const decodedSource = decodeURIComponent(encodedSource);
+
+    openDiagramEditPanel({
+      container,
+      type: diagramType,
+      source: decodedSource,
+      encodedSource,
+      onApply: (newFence, oldEncoded) => {
+        const tab = getActiveTab();
+        if (!tab) return;
+        const updated = applyDiagramEdit(tab.content, oldEncoded, newFence);
+        updateTabContent(tab.id, updated);
+        emit('set-editor-content', updated);
+      },
+    });
+  });
+
   const zoomBtn = document.createElement('button');
   zoomBtn.textContent = '🔍 Zoom';
   zoomBtn.title = 'Open in zoom modal';
@@ -278,7 +306,7 @@ function addDiagramToolbar(container: HTMLElement, source: string): void {
     if (svg) downloadDiagramAsSVG(svg, 'diagram');
   });
 
-  toolbar.append(zoomBtn, pngBtn, svgBtn);
+  toolbar.append(editBtn, zoomBtn, pngBtn, svgBtn);
   container.appendChild(toolbar);
 }
 
