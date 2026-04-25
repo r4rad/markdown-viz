@@ -14,6 +14,7 @@ import {
 } from '../lib/auth';
 import { restoreState } from '../lib/state';
 import { openFeedbackModal } from './FeedbackModal';
+import { openChangelogModal } from './ChangelogModal';
 import { getGroqApiKey, setGroqApiKey, clearGroqApiKey } from '../lib/groq-summarize';
 import type { UserProfile } from '../types';
 
@@ -374,6 +375,16 @@ function renderPanelContent(): void {
     openFeedbackModal();
   });
   feedbackSection.appendChild(feedbackBtn);
+
+  const whatsNewBtn = document.createElement('button');
+  whatsNewBtn.className = 'settings-action-btn wide';
+  whatsNewBtn.innerHTML = `<span>🎉</span><span>What's New</span>`;
+  whatsNewBtn.addEventListener('click', () => {
+    closeSettingsMenu();
+    openChangelogModal();
+  });
+  feedbackSection.appendChild(whatsNewBtn);
+
   content.appendChild(feedbackSection);
 }
 
