@@ -4,18 +4,55 @@ import { defaultKeymap, history, historyKeymap, indentWithTab } from '@codemirro
 import { markdown, markdownLanguage } from '@codemirror/lang-markdown';
 import { languages } from '@codemirror/language-data';
 import { bracketMatching, indentOnInput, syntaxHighlighting, defaultHighlightStyle, foldGutter, foldKeymap, HighlightStyle } from '@codemirror/language';
-import { closeBrackets, closeBracketsKeymap, autocompletion, completionKeymap } from '@codemirror/autocomplete';
+import { closeBrackets, closeBracketsKeymap, autocompletion, completionKeymap, type CompletionContext, type CompletionResult } from '@codemirror/autocomplete';
 import { searchKeymap, highlightSelectionMatches } from '@codemirror/search';
 import { lintKeymap } from '@codemirror/lint';
 import { tags } from '@lezer/highlight';
 import { getActiveTab, updateTabContent, updateTabCursor, getState } from '../lib/state';
 import { on, emit } from '../lib/events';
+import { DIAGRAM_TYPES, DIAGRAM_LABELS, getDrawTemplate } from '../lib/draw-command';
 import type { FileTab } from '../types';
 
 let view: EditorView | null = null;
 let editorContainer: HTMLElement | null = null;
 let ignoreNextUpdate = false;
 let ignoreEditorScroll = false;
+
+// ─── /draw slash-command completion ───────────────────────────────────────────
+
+const DRAW_EMOJI: Record<string, string> = {
+  mermaid: '🔷',
+  nomnoml: '📐',
+  dot:     '🕸️',
+};
+
+function drawCompletionSource(context: CompletionContext): CompletionResult | null {
+  // Match a /draw token at the cursor (possibly partially typed)
+  const word = context.matchBefore(/\/\w*/);
+  if (!word) return null;
+  if (!word.text.startsWith('/draw') && !/^\/d(r(a(w?)?)?)?$/.test(word.text)) return null;
+  if (word.text.length < 2) return null;
+
+  return {
+    from: word.from,
+    options: DIAGRAM_TYPES.map((type) => ({
+      label:  `/draw:${type}`,
+      displayLabel: `${DRAW_EMOJI[type]} ${DIAGRAM_LABELS[type]}`,
+      detail: 'Insert diagram block',
+      type:   'keyword',
+      apply(editorView, _completion, from, to) {
+        const template = getDrawTemplate(type);
+        editorView.dispatch({
+          changes: { from, to, insert: template },
+          // Place cursor inside the code fence content area
+          selection: { anchor: from + template.indexOf('\n', 1) + 1 },
+        });
+        editorView.focus();
+      },
+    })),
+    validFor: /^\/\w*$/,
+  };
+}
 
 function createEditorTheme(): Extension {
   return EditorView.theme({
@@ -138,7 +175,7 @@ function getExtensions(): Extension[] {
     createSyntaxHighlightStyle(),
     bracketMatching(),
     closeBrackets(),
-    autocompletion(),
+    autocompletion({ override: [drawCompletionSource] }),
     rectangularSelection(),
     highlightActiveLine(),
     highlightSelectionMatches(),
