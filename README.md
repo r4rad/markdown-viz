@@ -33,6 +33,9 @@ A zero-framework, performance-oriented Markdown editor, live preview, and beauti
 
 All diagrams include a **zoom/pan modal** (scroll to zoom, drag to pan) and **PNG/SVG export**.
 
+- **`/draw` slash command** — type `/draw` in the editor, pick a diagram type from the dropdown, and a fenced code block is inserted at the cursor with placeholder source
+- **Inline diagram editor** — every rendered diagram in the preview has an **✏️ Edit** button; clicking it opens a Confluence-style panel directly below the diagram with a type selector, live-preview pane, and Apply/Cancel buttons; Apply replaces the code fence in the editor source
+
 ### Themes (17 built-in)
 | Light | Dark |
 |-------|------|
@@ -105,6 +108,7 @@ Real-time document stats at the bottom of the screen:
 - **Settings → Feedback** — star rating (1–5), name/email (auto-filled when signed in), message
 - **Stored in Firestore** `feedback` collection
 - **Email delivery** via EmailJS (optional — requires `VITE_EMAILJS_*` env vars)
+- **Settings → What's New** — opens the changelog modal at any time; auto-shown on first visit after each release
 
 ### Mobile & Responsive
 - **Settings gear** — all features accessible via slide-in settings panel on mobile
@@ -130,7 +134,7 @@ npm run build
 # Preview production build
 npm run preview
 
-# Run tests (274 tests, 17 files)
+# Run tests (316 tests, 19 files)
 npm test
 
 # Watch mode
@@ -327,7 +331,7 @@ The `index.html` is optimized for search engine ranking on these key terms:
 ## 🧪 Testing
 
 ```bash
-npm test              # Run all 274 tests (17 files)
+npm test              # Run all 316 tests (19 files)
 npm run test:watch    # Watch mode
 npm run test:coverage # Coverage report
 ```
@@ -349,6 +353,8 @@ npm run test:coverage # Coverage report
 | `tests/sync-animation.test.ts` | Unit | CRDT sync animation states |
 | `tests/e2e.test.ts` | E2E | Full app smoke and interaction flows |
 | `tests/crdt.test.ts` | Unit | CRDT checksum and session management |
+| `tests/draw-command.test.ts` | Unit | `/draw` command utilities — templates, type guards |
+| `tests/changelog.test.ts` | Unit | Changelog state helpers, entry structure |
 
 ---
 

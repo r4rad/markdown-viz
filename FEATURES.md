@@ -56,6 +56,24 @@ Three engines are supported:
 
 Every rendered diagram has a **zoom/pan modal** — click to open, scroll to zoom (up to 10×), drag to explore, then download as **PNG or SVG** in one click.
 
+**New in v1.1.0 — `/draw` slash command**
+
+Type `/draw` in the editor to bring up an autocomplete menu. Choose your diagram type and a ready-to-edit code block is inserted at the cursor:
+
+```
+/draw  →  [Mermaid 🧜, Nomnoml 📦, Graphviz DOT 🌐]
+```
+
+**New in v1.1.0 — Inline diagram editor (preview mode)**
+
+Every diagram in the live preview now has an **✏️ Edit** button. Clicking it opens a Confluence-style panel right below the diagram:
+
+- **Type dropdown** — switch between Mermaid, Nomnoml, and Graphviz DOT
+- **Source textarea** — edit the diagram source directly
+- **Live preview** — see the rendered result update as you type (300 ms debounce)
+- **Apply** — replaces the code fence in your editor source
+- **Cancel / Esc** — dismisses without saving
+
 ---
 
 ### 🧮 Math That Looks Like Math
@@ -179,7 +197,13 @@ Not a stripped-down version. The full feature set.
 
 ---
 
-### 💬 Table of Contents That Actually Works
+### 📣 What's New — Changelog
+
+**First visit after a release?** A "What's New" popup appears automatically (600 ms after the app loads) listing everything that changed in the current version. Dismiss it once and it won't show again until the next release.
+
+**Want to see it again?** Settings → **What's New** re-opens the modal at any time.
+
+---
 
 Write a `[Link to section](#my-section)` in your document and clicking it in the preview **scrolls directly to that heading** — perfectly positioned, no overshoot. Works for any depth of heading, any document length.
 
