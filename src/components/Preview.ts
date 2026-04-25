@@ -10,6 +10,8 @@ let previewEl: HTMLElement;
 let contentEl: HTMLElement;
 let renderTimer: ReturnType<typeof setTimeout> | null = null;
 let previewEditable = false;
+let drawFabEl: HTMLButtonElement | null = null;
+let cursorAnchorText = '';
 const headingSlugCounts = new Map<string, number>();
 let highlightModule: typeof import('highlight.js') | null = null;
 let katexModule: typeof import('katex') | null = null;
@@ -438,7 +440,105 @@ export function setPreviewEditable(editable: boolean): void {
     contentEl.classList.toggle('preview-editable', editable);
     if (editable) protectNonEditableElements();
   }
+  if (drawFabEl) drawFabEl.style.display = editable ? 'flex' : 'none';
+  if (previewEl) previewEl.classList.toggle('preview-edit-mode', editable);
+  if (!editable) cursorAnchorText = '';
   emit('preview-mode-changed', editable);
+}
+
+// ─── Cursor-aware diagram insertion helpers ───────────────────────────────────
+
+/** Records the text content of the top-level block under the cursor. */
+function updateCursorAnchor(): void {
+  if (!previewEditable) return;
+  const sel = window.getSelection();
+  if (!sel?.anchorNode) { cursorAnchorText = ''; return; }
+
+  let node: Node | null = sel.anchorNode;
+  // Handle: caret placed directly on contentEl (between blocks)
+  if (node === contentEl) {
+    const idx = Math.max(0, Math.min(sel.anchorOffset, contentEl.children.length - 1));
+    node = contentEl.children[idx] ?? null;
+  } else {
+    while (node && node.parentNode !== contentEl) node = node.parentNode;
+  }
+
+  if (!node || !(node instanceof HTMLElement) || !contentEl.contains(node)) {
+    cursorAnchorText = '';
+    return;
+  }
+  cursorAnchorText = node.textContent?.replace(/\s+/g, ' ').trim().slice(0, 60) ?? '';
+}
+
+/**
+ * Finds where in `markdown` to insert a new block after the block containing
+ * `anchorText`. Returns the character index to insert at, or -1 on failure.
+ */
+function findInsertPosition(markdown: string, anchorText: string): number {
+  if (!anchorText || anchorText.length < 3) return -1;
+
+  // Try progressively shorter prefixes to handle inline markdown syntax
+  // (e.g. "bold text" is in "**bold text**"; 8-char minimum avoids false positives)
+  let matchIdx = -1;
+  for (let len = Math.min(anchorText.length, 60); len >= 8; len -= 8) {
+    matchIdx = markdown.indexOf(anchorText.slice(0, len));
+    if (matchIdx >= 0) break;
+  }
+  if (matchIdx < 0) return -1;
+
+  // Determine if matchIdx is inside a fenced code block
+  let inFence = false;
+  let fenceMarker = '';
+  for (const line of markdown.slice(0, matchIdx).split('\n')) {
+    if (!inFence) {
+      const m = line.match(/^(`{3,}|~{3,})/);
+      if (m) { inFence = true; fenceMarker = m[1]; }
+    } else if (line.startsWith(fenceMarker)) {
+      inFence = false;
+    }
+  }
+
+  // Walk forward from matchIdx to the end of the current block
+  let pos = matchIdx;
+  while (pos < markdown.length) {
+    const nl = markdown.indexOf('\n', pos);
+    if (nl < 0) { pos = markdown.length; break; }
+    const line = markdown.slice(pos, nl);
+
+    if (!inFence) {
+      const fm = line.match(/^(`{3,}|~{3,})/);
+      if (fm) {
+        inFence = true;
+        fenceMarker = fm[1];
+      } else if (line.trim() === '') {
+        // Blank line = end of block; skip all consecutive blank lines
+        let nextPos = nl + 1;
+        while (nextPos < markdown.length && markdown[nextPos] === '\n') nextPos++;
+        return nextPos;
+      }
+    } else if (line.startsWith(fenceMarker)) {
+      // End of fenced code block
+      inFence = false;
+      let nextPos = nl + 1;
+      while (nextPos < markdown.length && markdown[nextPos] === '\n') nextPos++;
+      return nextPos;
+    }
+    pos = nl + 1;
+  }
+  return pos; // end of document
+}
+
+/** Builds the updated markdown string with `fence` spliced in at cursor position. */
+function buildInsertContent(content: string, fence: string, anchorText: string): string {
+  const insertPos = findInsertPosition(content, anchorText);
+  if (insertPos < 0 || insertPos >= content.length) {
+    return content.trimEnd() + '\n\n' + fence + '\n';
+  }
+  const before = content.slice(0, insertPos);
+  const after = content.slice(insertPos);
+  const sepBefore = before.endsWith('\n\n') ? '' : before.endsWith('\n') ? '\n' : '\n\n';
+  const sepAfter = after.startsWith('\n') ? '' : '\n\n';
+  return before + sepBefore + fence + sepAfter + after;
 }
 
 export function isPreviewEditable(): boolean {
@@ -455,23 +555,35 @@ export function createPreview(): HTMLElement {
   contentEl.setAttribute('contenteditable', 'false');
   previewEl.appendChild(contentEl);
 
-  // ── /draw FAB — insert a new diagram from the preview pane ────────────────
+  // ── /draw FAB — only visible in preview edit mode ────────────────────────
   const drawFab = document.createElement('button');
   drawFab.className = 'preview-draw-fab';
-  drawFab.title = 'Insert a diagram (/draw)';
+  drawFab.style.display = 'none'; // hidden until edit mode is active
+  drawFab.title = 'Insert a diagram at cursor (/draw)';
   drawFab.innerHTML = '📊 /draw';
-  drawFab.setAttribute('aria-label', 'Insert diagram');
+  drawFab.setAttribute('aria-label', 'Insert diagram at cursor');
   drawFab.addEventListener('click', (e) => {
     e.stopPropagation();
+    if (!previewEditable) return;
     openDiagramInsertPanel(previewEl, (fence) => {
       const tab = getActiveTab();
       if (!tab) return;
-      const updated = tab.content.trimEnd() + '\n\n' + fence + '\n';
+      const updated = buildInsertContent(tab.content, fence, cursorAnchorText);
       updateTabContent(tab.id, updated);
       emit('set-editor-content', updated);
     });
   });
   previewEl.appendChild(drawFab);
+  drawFabEl = drawFab;
+
+  // Track cursor position for diagram insertion (works for mouse, keyboard, touch)
+  document.addEventListener('selectionchange', () => {
+    if (!previewEditable) return;
+    const sel = window.getSelection();
+    if (sel?.anchorNode && contentEl.contains(sel.anchorNode)) {
+      updateCursorAnchor();
+    }
+  });
 
   configureMarked();
 
@@ -531,6 +643,7 @@ export function createPreview(): HTMLElement {
   });
   on('active-tab-changed', () => {
     ignoreNextRender = false;
+    cursorAnchorText = ''; // stale cursor from previous tab
     const tab = getActiveTab();
     if (tab && contentEl) {
       // Schedule render then restore saved scroll position once the DOM settles
@@ -538,6 +651,7 @@ export function createPreview(): HTMLElement {
       renderTimer = setTimeout(async () => {
         if (tab) {
           await renderContent(tab.content);
+          cursorAnchorText = ''; // also reset after render
           // Restore scroll after render completes
           requestAnimationFrame(() => {
             if (contentEl && tab) contentEl.scrollTop = tab.scrollPreview ?? 0;
