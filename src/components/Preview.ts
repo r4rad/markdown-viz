@@ -367,7 +367,13 @@ async function renderContent(mdContent: string): Promise<void> {
     ALLOW_UNKNOWN_PROTOCOLS: true,
   });
 
+  // Save scroll before replacing HTML so we can restore after render
+  const savedScroll = contentEl.scrollTop;
+
   contentEl.innerHTML = html;
+
+  // Restore scroll position immediately so the viewport doesn't jump
+  if (savedScroll > 0) contentEl.scrollTop = savedScroll;
 
   // Protect diagrams, math, and code blocks from WYSIWYG editing
   protectNonEditableElements();
@@ -477,7 +483,25 @@ export function createPreview(): HTMLElement {
     if (ignoreNextRender) { ignoreNextRender = false; return; }
     scheduleRender();
   });
-  on('active-tab-changed', () => { ignoreNextRender = false; scheduleRender(); });
+  on('active-tab-changed', () => {
+    ignoreNextRender = false;
+    const tab = getActiveTab();
+    if (tab && contentEl) {
+      // Schedule render then restore saved scroll position once the DOM settles
+      if (renderTimer) clearTimeout(renderTimer);
+      renderTimer = setTimeout(async () => {
+        if (tab) {
+          await renderContent(tab.content);
+          // Restore scroll after render completes
+          requestAnimationFrame(() => {
+            if (contentEl && tab) contentEl.scrollTop = tab.scrollPreview ?? 0;
+          });
+        }
+      }, RENDER_DELAY);
+    } else {
+      scheduleRender();
+    }
+  });
   on('state-restored', () => { ignoreNextRender = false; scheduleRender(); });
 
   // Re-init mermaid on theme change
