@@ -8,13 +8,16 @@
  *   • A live preview that re-renders on every keystroke
  *   • Apply / Cancel buttons
  *
+ * Also exports `openDiagramInsertPanel` for creating new diagrams from the
+ * preview pane's floating "/draw" button.
+ *
  * On Apply, an 'update-diagram-source' event is emitted so the editor pane
  * can update the underlying markdown.
  */
 
 import { emit } from '../lib/events';
 import {
-  DIAGRAM_TYPES, DIAGRAM_LABELS,
+  DIAGRAM_TYPES, DIAGRAM_LABELS, DIAGRAM_TEMPLATES,
   isValidDiagramType, replaceDiagramType,
   type DiagramType,
 } from '../lib/draw-command';
@@ -35,7 +38,8 @@ export interface DiagramEditPanelOptions {
   onApply: (newFence: string, oldEncodedSource: string) => void;
 }
 
-let liveRenderTimer: ReturnType<typeof setTimeout> | null = null;
+/** Currently open insert-mode overlay (only one can exist at a time). */
+let insertOverlayEl: HTMLElement | null = null;
 
 /** Opens (or replaces) the edit panel attached to a diagram container. */
 export function openDiagramEditPanel(opts: DiagramEditPanelOptions): void {
@@ -58,11 +62,60 @@ export function closeDiagramEditPanel(container: HTMLElement): void {
   }
 }
 
-// ─── Panel construction ───────────────────────────────────────────────────────
+/**
+ * Opens (or toggles) a "Insert Diagram" panel anchored to the preview pane.
+ * The panel is mounted as a sibling of the content div inside previewPane so
+ * it is never wiped by renderContent() replacing innerHTML.
+ */
+export function openDiagramInsertPanel(
+  previewPane: HTMLElement,
+  onInsert: (fence: string) => void,
+): void {
+  // Toggle: if already open, close it
+  if (insertOverlayEl && previewPane.contains(insertOverlayEl)) {
+    insertOverlayEl.remove();
+    insertOverlayEl = null;
+    return;
+  }
+  // Close any stale overlay from another pane
+  insertOverlayEl?.remove();
+
+  insertOverlayEl = document.createElement('div');
+  insertOverlayEl.className = 'diagram-insert-overlay';
+
+  const panel = buildInsertPanel(
+    (fence) => {
+      onInsert(fence);
+      insertOverlayEl?.remove();
+      insertOverlayEl = null;
+    },
+    () => {
+      insertOverlayEl?.remove();
+      insertOverlayEl = null;
+    },
+  );
+
+  insertOverlayEl.appendChild(panel);
+  previewPane.appendChild(insertOverlayEl);
+
+  // Focus the textarea after mount
+  requestAnimationFrame(() => {
+    panel.querySelector<HTMLTextAreaElement>('.dep-textarea')?.focus();
+  });
+}
+
+// ─── Edit panel construction ──────────────────────────────────────────────────
 
 function buildPanel(opts: DiagramEditPanelOptions): HTMLElement {
   let currentType = opts.type;
   let currentSource = opts.source;
+
+  // Each panel owns its own debounce timer — no shared module-level state
+  let liveRenderTimer: ReturnType<typeof setTimeout> | null = null;
+  function scheduleLiveRender() {
+    if (liveRenderTimer) clearTimeout(liveRenderTimer);
+    liveRenderTimer = setTimeout(() => renderLivePreview(currentType, currentSource, previewArea), 300);
+  }
 
   const panel = document.createElement('div');
   panel.className = 'diagram-edit-panel';
@@ -162,14 +215,14 @@ function buildPanel(opts: DiagramEditPanelOptions): HTMLElement {
   // ── Wire up events ────────────────────────────────────────────────────────
   textarea.addEventListener('input', () => {
     currentSource = textarea.value;
-    scheduleLiveRender(currentType, currentSource, previewArea);
+    scheduleLiveRender();
   });
 
   typeSelect.addEventListener('change', () => {
     const val = typeSelect.value;
     if (isValidDiagramType(val)) {
       currentType = val;
-      scheduleLiveRender(currentType, currentSource, previewArea);
+      scheduleLiveRender();
     }
   });
 
@@ -181,17 +234,149 @@ function buildPanel(opts: DiagramEditPanelOptions): HTMLElement {
   panel.append(header, body, footer);
 
   // Initial live render
-  scheduleLiveRender(currentType, currentSource, previewArea);
+  scheduleLiveRender();
+
+  return panel;
+}
+
+// ─── Insert panel construction ────────────────────────────────────────────────
+
+function buildInsertPanel(
+  onInsert: (fence: string) => void,
+  onClose: () => void,
+): HTMLElement {
+  let currentType: DiagramType = 'mermaid';
+  let currentSource = DIAGRAM_TEMPLATES[currentType];
+  // Track whether the textarea still holds an unmodified template
+  let lastAutoFilledTemplate = currentSource;
+
+  let liveRenderTimer: ReturnType<typeof setTimeout> | null = null;
+  function scheduleLiveRender() {
+    if (liveRenderTimer) clearTimeout(liveRenderTimer);
+    liveRenderTimer = setTimeout(() => renderLivePreview(currentType, currentSource, previewArea), 300);
+  }
+
+  const panel = document.createElement('div');
+  panel.className = 'diagram-edit-panel';
+  panel.setAttribute('role', 'dialog');
+  panel.setAttribute('aria-label', 'Insert diagram');
+
+  // ── Header ────────────────────────────────────────────────────────────────
+  const header = document.createElement('div');
+  header.className = 'dep-header';
+
+  const title = document.createElement('span');
+  title.className = 'dep-title';
+  title.textContent = '➕ Insert Diagram';
+
+  const typeSelect = document.createElement('select');
+  typeSelect.className = 'dep-type-select';
+  typeSelect.setAttribute('aria-label', 'Diagram type');
+  for (const t of DIAGRAM_TYPES) {
+    const opt = document.createElement('option');
+    opt.value = t;
+    opt.textContent = DIAGRAM_LABELS[t];
+    opt.selected = t === currentType;
+    typeSelect.appendChild(opt);
+  }
+
+  const closeBtn = document.createElement('button');
+  closeBtn.className = 'dep-close-btn';
+  closeBtn.innerHTML = '✕';
+  closeBtn.title = 'Close (Esc)';
+  closeBtn.addEventListener('click', onClose);
+
+  header.append(title, typeSelect, closeBtn);
+
+  // ── Body: editor + live preview ───────────────────────────────────────────
+  const body = document.createElement('div');
+  body.className = 'dep-body';
+
+  const editorWrap = document.createElement('div');
+  editorWrap.className = 'dep-editor-wrap';
+
+  const editorLabel = document.createElement('label');
+  editorLabel.className = 'dep-label';
+  editorLabel.textContent = 'Diagram source';
+
+  const textarea = document.createElement('textarea');
+  textarea.className = 'dep-textarea';
+  textarea.value = currentSource;
+  textarea.setAttribute('spellcheck', 'false');
+  textarea.setAttribute('autocomplete', 'off');
+  textarea.setAttribute('aria-label', 'Diagram source code');
+
+  editorWrap.append(editorLabel, textarea);
+
+  const previewWrap = document.createElement('div');
+  previewWrap.className = 'dep-preview-wrap';
+
+  const previewLabel = document.createElement('label');
+  previewLabel.className = 'dep-label';
+  previewLabel.textContent = 'Live preview';
+
+  const previewArea = document.createElement('div');
+  previewArea.className = 'dep-preview-area';
+  previewArea.innerHTML = '<span class="dep-preview-hint">Rendering…</span>';
+
+  previewWrap.append(previewLabel, previewArea);
+  body.append(editorWrap, previewWrap);
+
+  // ── Footer: Insert / Cancel ───────────────────────────────────────────────
+  const footer = document.createElement('div');
+  footer.className = 'dep-footer';
+
+  const cancelBtn = document.createElement('button');
+  cancelBtn.className = 'dep-btn dep-btn-cancel';
+  cancelBtn.textContent = 'Cancel';
+  cancelBtn.addEventListener('click', onClose);
+
+  const insertBtn = document.createElement('button');
+  insertBtn.className = 'dep-btn dep-btn-apply';
+  insertBtn.textContent = 'Insert';
+  insertBtn.addEventListener('click', () => {
+    if (!currentSource.trim()) return;
+    onInsert(replaceDiagramType(currentSource, currentType));
+  });
+
+  const hint = document.createElement('span');
+  hint.className = 'dep-footer-hint';
+  hint.textContent = 'Appends a new diagram block to your document.';
+
+  footer.append(hint, cancelBtn, insertBtn);
+
+  // ── Wire up events ────────────────────────────────────────────────────────
+  textarea.addEventListener('input', () => {
+    currentSource = textarea.value;
+    scheduleLiveRender();
+  });
+
+  typeSelect.addEventListener('change', () => {
+    const val = typeSelect.value;
+    if (!isValidDiagramType(val)) return;
+    // Only replace textarea content with the new template if the user hasn't
+    // edited it away from the previously auto-filled template
+    if (currentSource === lastAutoFilledTemplate) {
+      currentSource = DIAGRAM_TEMPLATES[val];
+      textarea.value = currentSource;
+      lastAutoFilledTemplate = currentSource;
+    }
+    currentType = val;
+    scheduleLiveRender();
+  });
+
+  // Dismiss on Escape
+  panel.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') { e.stopPropagation(); onClose(); }
+  });
+
+  panel.append(header, body, footer);
+  scheduleLiveRender();
 
   return panel;
 }
 
 // ─── Live preview rendering ───────────────────────────────────────────────────
-
-function scheduleLiveRender(type: DiagramType, source: string, area: HTMLElement): void {
-  if (liveRenderTimer) clearTimeout(liveRenderTimer);
-  liveRenderTimer = setTimeout(() => renderLivePreview(type, source, area), 300);
-}
 
 async function renderLivePreview(type: DiagramType, source: string, area: HTMLElement): Promise<void> {
   area.innerHTML = '<span class="dep-preview-hint">Rendering…</span>';
