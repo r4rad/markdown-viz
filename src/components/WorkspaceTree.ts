@@ -1,6 +1,7 @@
 import {
   addFolder,
   addTab,
+  canEditActiveWorkspace,
   deleteFolder,
   getState,
   moveFolder,
@@ -18,6 +19,7 @@ import { loadRepoIndex, repoIndexKey, saveRepoIndex, type RepoIndexEntry } from 
 import { findTabByGithubPath, normalizePathPrefix } from '../lib/workspace';
 import { driveConnector, githubConnector } from '../lib/connectors';
 import type { FolderId, GitHubRepoLink, WorkspaceFolder } from '../types';
+import { mountWorkspaceSwitcher, workspaceActions } from './CollabUI';
 
 const linkedCache = new Map<string, RepoIndexEntry[]>();
 
@@ -28,8 +30,9 @@ export function createWorkspaceTree(): HTMLElement {
 
   const header = document.createElement('div');
   header.className = 'workspace-tree-header';
-  header.innerHTML = `<span>Workspace</span><button class="workspace-icon-btn" data-act="new-root" title="New folder">+</button>`;
+  header.innerHTML = `<span>Workspace</span><button class="workspace-icon-btn" data-act="new-root" title="New folder">+</button><button class="workspace-icon-btn" data-act="collab" title="Sharing">⋯</button>`;
   el.appendChild(header);
+  mountWorkspaceSwitcher(header);
 
   const status = document.createElement('div');
   status.className = 'workspace-status';
@@ -51,8 +54,15 @@ export function createWorkspaceTree(): HTMLElement {
   header.addEventListener('click', (e) => {
     const btn = (e.target as HTMLElement).closest('[data-act="new-root"]');
     if (btn) {
+      if (!canEditActiveWorkspace()) return;
       const name = window.prompt('Folder name');
       if (name?.trim()) addFolder(name.trim(), null);
+    }
+    if ((e.target as HTMLElement).closest('[data-act="collab"]')) {
+      const acts = workspaceActions();
+      const pick = window.prompt(acts.map((a, i) => `${i + 1}. ${a[0]}`).join('\n'));
+      const n = Number(pick) - 1;
+      if (acts[n]) acts[n][1]();
     }
   });
 
