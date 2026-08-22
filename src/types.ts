@@ -1,3 +1,33 @@
+export type FolderId = string;
+export type FileId = string;
+
+export interface GitHubRepoLink {
+  owner: string;
+  repo: string;
+  ref?: string;
+  pathPrefix?: string;
+}
+
+export interface WorkspaceFolder {
+  id: FolderId;
+  name: string;
+  parentId: FolderId | null;
+  createdAt: number;
+  updatedAt: number;
+  repoLink?: GitHubRepoLink | null;
+}
+
+export type FileOrigin =
+  | { kind: 'local' }
+  | {
+      kind: 'github';
+      owner: string;
+      repo: string;
+      ref: string;
+      path: string;
+      sha: string;
+    };
+
 // ─── Tab / File types ───
 export interface FileTab {
   id: string;
@@ -9,6 +39,8 @@ export interface FileTab {
   dirty: boolean;
   updatedAt: number;
   createdAt: number;
+  folderId: FolderId | null;
+  origin: FileOrigin;
 }
 
 // ─── Theme types ───
@@ -28,6 +60,7 @@ export interface AppState {
   showPreview: boolean;
   showEditor: boolean;
   sidebarOpen: boolean;
+  folders: WorkspaceFolder[];
 }
 
 // ─── Auth ───

@@ -13,6 +13,8 @@ describe('Type Definitions (Smoke Tests)', () => {
       dirty: false,
       updatedAt: Date.now(),
       createdAt: Date.now(),
+      folderId: null,
+      origin: { kind: 'local' },
     };
     expect(tab.id).toBe('test-id');
     expect(tab.name).toBe('test.md');
@@ -29,6 +31,7 @@ describe('Type Definitions (Smoke Tests)', () => {
       showPreview: true,
       showEditor: true,
       sidebarOpen: false,
+      folders: [],
     };
     expect(state.tabs).toEqual([]);
     expect(state.activeTabId).toBeNull();
@@ -96,6 +99,8 @@ describe('Type Definitions (Smoke Tests)', () => {
       dirty: true,
       updatedAt: 0,
       createdAt: 0,
+      folderId: null,
+      origin: { kind: 'local' },
     };
     expect(tab.id).toBe('');
     expect(tab.cursorPos).toBe(-1);
@@ -113,6 +118,8 @@ describe('Type Definitions (Smoke Tests)', () => {
       dirty: false,
       updatedAt: Date.now(),
       createdAt: Date.now(),
+      folderId: null,
+      origin: { kind: 'local' },
     };
     const state: AppState = {
       tabs: [tab],
@@ -122,6 +129,7 @@ describe('Type Definitions (Smoke Tests)', () => {
       showPreview: false,
       showEditor: true,
       sidebarOpen: true,
+      folders: [],
     };
     expect(state.tabs.length).toBe(1);
     expect(state.activeTabId).toBe('tab-1');

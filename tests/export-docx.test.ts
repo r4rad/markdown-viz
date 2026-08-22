@@ -33,7 +33,8 @@ vi.mock('../src/components/Preview', () => {
     getPreviewElement: () => el,
     setPreviewEditable: vi.fn(),
     isPreviewEditable: vi.fn(() => false),
-  };
+      folders: [],
+    };
 });
 
 describe('Export DOCX', () => {
