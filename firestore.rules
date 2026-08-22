@@ -18,9 +18,83 @@ service cloud.firestore {
         allow read, write: if request.auth != null && request.auth.uid == userId;
       }
 
+      match /memberships/{workspaceId} {
+        allow read, write: if request.auth != null && request.auth.uid == userId;
+      }
+
       // Personal sync log
       match /syncLog/{entryId} {
         allow read, write: if request.auth != null && request.auth.uid == userId;
+      }
+    }
+
+    // Shared team workspaces (Phase 2). Public sharedDocs and CRDT docs stay below.
+    match /workspaces/{wsId} {
+      function isWsMember() {
+        return request.auth != null
+          && exists(/databases/$(database)/documents/workspaces/$(wsId)/members/$(request.auth.uid));
+      }
+      function wsRole() {
+        return get(/databases/$(database)/documents/workspaces/$(wsId)/members/$(request.auth.uid)).data.role;
+      }
+      function isWsOwner() {
+        return request.auth != null && (
+          resource.data.ownerId == request.auth.uid
+          || get(/databases/$(database)/documents/workspaces/$(wsId)).data.ownerId == request.auth.uid
+        );
+      }
+      function canEdit() {
+        return isWsMember() && (wsRole() == 'owner' || wsRole() == 'editor');
+      }
+
+      allow read: if request.auth != null && (
+        resource.data.ownerId == request.auth.uid || isWsMember()
+      );
+      allow create: if request.auth != null && request.resource.data.ownerId == request.auth.uid;
+      allow update, delete: if request.auth != null
+        && get(/databases/$(database)/documents/workspaces/$(wsId)).data.ownerId == request.auth.uid;
+
+      match /members/{uid} {
+        allow read: if isWsMember()
+          || get(/databases/$(database)/documents/workspaces/$(wsId)).data.ownerId == request.auth.uid;
+        allow create, update, delete: if request.auth != null && (
+          get(/databases/$(database)/documents/workspaces/$(wsId)).data.ownerId == request.auth.uid
+          || (uid == request.auth.uid
+              && request.resource.data.role == 'owner'
+              && get(/databases/$(database)/documents/workspaces/$(wsId)).data.ownerId == request.auth.uid)
+        );
+      }
+
+      match /folders/{folderId} {
+        allow read: if isWsMember();
+        allow write: if canEdit();
+      }
+      match /files/{fileId} {
+        allow read: if isWsMember();
+        allow write: if canEdit();
+      }
+      match /mappings/{mappingId} {
+        allow read: if isWsMember();
+        allow write: if canEdit();
+      }
+      match /versions/{versionId} {
+        allow read: if isWsMember();
+        allow create: if canEdit();
+        allow update, delete: if canEdit();
+      }
+      match /activity/{eventId} {
+        allow read: if isWsMember() && (
+          wsRole() == 'owner' || resource.data.actorId == request.auth.uid
+        );
+        allow create: if isWsMember() && request.resource.data.actorId == request.auth.uid;
+        allow update, delete: if false;
+      }
+      match /invites/{inviteId} {
+        allow read: if isWsMember()
+          || (request.auth != null && request.auth.token.email != null
+              && resource.data.email == request.auth.token.email);
+        allow write: if request.auth != null
+          && get(/databases/$(database)/documents/workspaces/$(wsId)).data.ownerId == request.auth.uid;
       }
     }
 
