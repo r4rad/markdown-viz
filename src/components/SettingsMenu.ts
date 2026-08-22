@@ -24,6 +24,7 @@ import {
 } from '../lib/github-token';
 import { getConfluenceToken, setConfluenceToken, getNotionToken, setNotionToken } from '../lib/wiki-tokens';
 import { isFirebaseConfigured } from '../lib/firebase-config';
+import { renderTemplateSettings } from './TemplateUI';
 
 let overlayEl: HTMLElement | null = null;
 let panelEl: HTMLElement | null = null;
@@ -397,6 +398,10 @@ function renderPanelContent(): void {
   notionRow.append(notionInput, notionBtn);
   ghSection.appendChild(notionRow);
   content.appendChild(ghSection);
+
+  const tplSection = createSection('Templates & folders');
+  renderTemplateSettings(tplSection);
+  content.appendChild(tplSection);
 
   // ─── AI Audio Section ───
   const aiAudioSection = createSection('AI Audio (Groq)');

@@ -17,7 +17,7 @@ import { applyTheme, getSavedTheme } from '../themes/themes';
 import { setupImport, openFilePicker } from '../lib/import';
 import { exportMarkdown, exportHTML, exportPDF, exportDOCX } from '../lib/export';
 import { beautifyMarkdown } from '../lib/beautifier';
-import { initFirebase, syncToCloud, updateCloudFileName, isAuthenticated, getCurrentUser } from '../lib/auth';
+import { loadTemplateSettings } from '../lib/template-actions';
 import { initAuthUI } from './AuthUI';
 import { shareDocument, loadSharedDocument, getShareIdFromURL, buildShareURL, triggerSystemShare, isSharingEnabled } from '../lib/share';
 import { computeChecksum, startCollaboration, stopCollaboration, getActiveSession } from '../lib/crdt';
@@ -289,6 +289,7 @@ function setupAutoSync(): void {
 
   on('auth-changed', (profile: unknown) => {
     if (autoSyncTimer) { clearInterval(autoSyncTimer); autoSyncTimer = null; }
+    if (profile) loadTemplateSettings().catch(console.error);
     if (profile) {
       autoSyncTimer = setInterval(async () => {
         if (!isAuthenticated()) return;

@@ -1,10 +1,11 @@
 import { icon } from './icons';
 import { themes, applyTheme } from '../themes/themes';
-import { getState, setTheme, addTab, toggleSyncScroll, togglePreview, toggleEditor, toggleSidebar } from '../lib/state';
+import { getState, setTheme, addTab, toggleSyncScroll, togglePreview, toggleEditor, toggleSidebar, canEditActiveWorkspace } from '../lib/state';
 import { emit, on } from '../lib/events';
 import { openSettingsMenu } from './SettingsMenu';
 import { isSharingEnabled } from '../lib/share';
 import { setPreviewEditable, isPreviewEditable } from './Preview';
+import { openQuickNote, openResearchCapture, openTemplatePicker } from './TemplateUI';
 
 export function createToolbar(): HTMLElement {
   const el = document.createElement('div');
@@ -104,6 +105,14 @@ export function createToolbar(): HTMLElement {
     <span class="toolbar-spacer"></span>
 
     <div class="toolbar-group desktop-only">
+      <button class="toolbar-btn" data-action="new-template" title="New from template">📄+</button>
+      <button class="toolbar-btn" data-action="quick-note" title="Quick note">📝</button>
+      <button class="toolbar-btn" data-action="save-research" title="Save research">🔎</button>
+    </div>
+
+    <span class="toolbar-separator desktop-only"></span>
+
+    <div class="toolbar-group desktop-only">
       <button class="toolbar-btn" data-action="import" title="Import file">${icon('upload')}<span class="btn-label">Import</span></button>
       <div class="dropdown">
         <button class="toolbar-btn" data-action="export-toggle" title="Export">${icon('download')}<span class="btn-label">Export</span></button>
@@ -197,6 +206,16 @@ export function createToolbar(): HTMLElement {
     const indicator = el.querySelector('#collab-indicator') as HTMLElement | null;
     if (indicator) indicator.style.display = active ? '' : 'none';
   });
+
+  const syncTemplateBtns = () => {
+    const show = canEditActiveWorkspace();
+    el.querySelectorAll('[data-action="new-template"], [data-action="quick-note"], [data-action="save-research"]').forEach((b) => {
+      (b as HTMLElement).style.display = show ? '' : 'none';
+    });
+  };
+  on('state-changed', syncTemplateBtns);
+  on('auth-changed', syncTemplateBtns);
+  syncTemplateBtns();
 
   return el;
 }
@@ -320,6 +339,15 @@ function setupToolbarEvents(toolbar: HTMLElement): void {
         break;
       case 'open-settings':
         openSettingsMenu();
+        break;
+      case 'new-template':
+        if (canEditActiveWorkspace()) openTemplatePicker();
+        break;
+      case 'quick-note':
+        if (canEditActiveWorkspace()) openQuickNote();
+        break;
+      case 'save-research':
+        if (canEditActiveWorkspace()) openResearchCapture();
         break;
       case 'toggle-workspace':
         toggleSidebar();

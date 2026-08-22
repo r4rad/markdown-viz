@@ -28,6 +28,7 @@ import { saveMapping, listMappings, mappingWithoutSecrets } from '../lib/wiki-ma
 import { computeChecksum } from '../lib/crdt';
 import { startCollaboration, stopCollaboration } from '../lib/crdt';
 import { canQueryWorkspaceActivity, canSyncWiki } from '../lib/workspace-acl';
+import { openQuickNote, openResearchCapture, openTemplatePicker } from './TemplateUI';
 import type { Role, WikiMapping } from '../types';
 
 let personalSnapshot: { folders: typeof getState extends () => infer S ? never : never } | null = null;
@@ -102,6 +103,11 @@ export function workspaceActions(): Array<[string, () => void]> {
     ['History…', openHistory],
     ['Activity…', openActivity],
     ['Wiki map/sync…', openWiki],
+    ...(canEditActiveWorkspace() ? [
+      ['New from template', openTemplatePicker],
+      ['Quick note', openQuickNote],
+      ['Save research', openResearchCapture],
+    ] as Array<[string, () => void]> : []),
   ];
 }
 
