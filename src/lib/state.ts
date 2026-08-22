@@ -1,5 +1,16 @@
-import type { AppState, FileTab } from '../types';
+import type { AppState, FileOrigin, FileTab, FolderId, GitHubRepoLink, WorkspaceFolder } from '../types';
 import { emit } from './events';
+import {
+  LOCAL_ORIGIN,
+  createFolder as createFolderRecord,
+  deleteFolder as deleteFolderRecords,
+  migrateTabs,
+  moveFolder as moveFolderRecord,
+  renameFolder as renameFolderRecord,
+  setFolderRepoLink as setFolderRepoLinkRecord,
+  setTabFolder as setTabFolderRecord,
+  type DeleteFolderMode,
+} from './workspace';
 
 const DEFAULT_CONTENT = `# Welcome to MarkdownViz
 
@@ -56,7 +67,11 @@ function generateUntitledName(): string {
   return `untitled-${n}.md`;
 }
 
-function createTab(name = 'untitled-1.md', content = DEFAULT_CONTENT): FileTab {
+function createTab(
+  name = 'untitled-1.md',
+  content = DEFAULT_CONTENT,
+  extras?: { folderId?: FolderId | null; origin?: FileOrigin },
+): FileTab {
   return {
     id: crypto.randomUUID(),
     name,
@@ -67,6 +82,8 @@ function createTab(name = 'untitled-1.md', content = DEFAULT_CONTENT): FileTab {
     dirty: false,
     updatedAt: Date.now(),
     createdAt: Date.now(),
+    folderId: extras?.folderId ?? null,
+    origin: extras?.origin ?? LOCAL_ORIGIN,
   };
 }
 
@@ -80,6 +97,7 @@ const state: AppState = {
   showPreview: true,
   showEditor: true,
   sidebarOpen: false,
+  folders: [],
 };
 
 export function getState(): Readonly<AppState> {
@@ -96,9 +114,14 @@ export function setTheme(themeId: string): void {
   emit('state-changed', state);
 }
 
-export function addTab(name?: string, content?: string): FileTab {
+export function addTab(
+  name?: string,
+  content?: string,
+  extras?: { folderId?: FolderId | null; origin?: FileOrigin; id?: string },
+): FileTab {
   const resolvedName = name ?? generateUntitledName();
-  const tab = createTab(resolvedName, content ?? '');
+  const tab = createTab(resolvedName, content ?? '', extras);
+  if (extras?.id) tab.id = extras.id;
   state.tabs.push(tab);
   state.activeTabId = tab.id;
   emit('tab-added', tab);
@@ -181,12 +204,77 @@ export function toggleEditor(): void {
 
 export function restoreState(saved: Partial<AppState>): void {
   if (saved.tabs?.length) {
-    state.tabs = saved.tabs;
+    state.tabs = migrateTabs(saved.tabs as Parameters<typeof migrateTabs>[0]);
     state.activeTabId = saved.activeTabId ?? saved.tabs[0].id;
   }
+  if (saved.folders) state.folders = saved.folders;
   if (saved.theme) state.theme = saved.theme;
   if (saved.syncScroll !== undefined) state.syncScroll = saved.syncScroll;
+  if (saved.sidebarOpen !== undefined) state.sidebarOpen = saved.sidebarOpen;
   emit('state-restored', state);
   emit('theme-changed', state.theme);
   emit('active-tab-changed', getActiveTab());
+}
+
+export function toggleSidebar(): void {
+  state.sidebarOpen = !state.sidebarOpen;
+  emit('layout-changed', state);
+  emit('state-changed', state);
+}
+
+export function setTabDirty(id: string, dirty: boolean): void {
+  const tab = state.tabs.find(t => t.id === id);
+  if (!tab) return;
+  tab.dirty = dirty;
+  emit('state-changed', state);
+}
+
+export function updateTabOrigin(id: string, origin: FileOrigin): void {
+  const tab = state.tabs.find(t => t.id === id);
+  if (!tab) return;
+  tab.origin = origin;
+  emit('state-changed', state);
+}
+
+export function setTabFolder(tabId: string, folderId: FolderId | null): void {
+  state.tabs = setTabFolderRecord(state.tabs, tabId, folderId);
+  emit('state-changed', state);
+}
+
+export function addFolder(name: string, parentId: FolderId | null): WorkspaceFolder {
+  state.folders = createFolderRecord(state.folders, { name, parentId });
+  const folder = state.folders[state.folders.length - 1];
+  emit('state-changed', state);
+  return folder;
+}
+
+export function renameFolder(id: FolderId, name: string): void {
+  state.folders = renameFolderRecord(state.folders, id, name);
+  emit('state-changed', state);
+}
+
+export function moveFolder(id: FolderId, newParentId: FolderId | null): void {
+  state.folders = moveFolderRecord(state.folders, id, newParentId);
+  emit('state-changed', state);
+}
+
+export function deleteFolder(id: FolderId, mode: DeleteFolderMode): string[] {
+  const result = deleteFolderRecords(state.folders, state.tabs, id, mode);
+  state.folders = result.folders;
+  state.tabs = result.tabs;
+  if (result.removedTabIds.includes(state.activeTabId ?? '')) {
+    state.activeTabId = state.tabs[0]?.id ?? null;
+    if (!state.tabs.length) {
+      const tab = addTab();
+      state.activeTabId = tab.id;
+    }
+    emit('active-tab-changed', getActiveTab());
+  }
+  emit('state-changed', state);
+  return result.removedTabIds;
+}
+
+export function setFolderRepoLink(id: FolderId, repoLink: GitHubRepoLink | null): void {
+  state.folders = setFolderRepoLinkRecord(state.folders, id, repoLink);
+  emit('state-changed', state);
 }
