@@ -16,7 +16,13 @@ import { restoreState } from '../lib/state';
 import { openFeedbackModal } from './FeedbackModal';
 import { openChangelogModal } from './ChangelogModal';
 import { getGroqApiKey, setGroqApiKey, clearGroqApiKey } from '../lib/groq-summarize';
-import type { UserProfile } from '../types';
+import {
+  getGithubWritePref,
+  setGithubWritePref,
+  getSessionGithubPat,
+  setSessionGithubPat,
+} from '../lib/github-token';
+import { isFirebaseConfigured } from '../lib/firebase-config';
 
 let overlayEl: HTMLElement | null = null;
 let panelEl: HTMLElement | null = null;
@@ -319,6 +325,47 @@ function renderPanelContent(): void {
   }
   themeSection.appendChild(darkGrid);
   content.appendChild(themeSection);
+
+  // ─── GitHub save / MCP ───
+  const ghSection = createSection('GitHub & MCP');
+  if (!isFirebaseConfigured()) {
+    const note = document.createElement('div');
+    note.className = 'settings-sublabel';
+    note.textContent = 'Firebase is not configured: cloud sync, GitHub OAuth, and MCP token issuance that needs cloud identity are disabled. Local folders still work.';
+    ghSection.appendChild(note);
+  }
+  const writeRow = document.createElement('label');
+  writeRow.style.display = 'flex';
+  writeRow.style.gap = '8px';
+  writeRow.style.alignItems = 'center';
+  const writeCb = document.createElement('input');
+  writeCb.type = 'checkbox';
+  writeCb.checked = getGithubWritePref();
+  writeCb.addEventListener('change', () => setGithubWritePref(writeCb.checked));
+  writeRow.append(writeCb, document.createTextNode('Enable GitHub save (request repo write scope on next GitHub sign-in)'));
+  ghSection.appendChild(writeRow);
+  const patHelp = document.createElement('div');
+  patHelp.className = 'settings-sublabel';
+  patHelp.textContent = 'Optional PAT is stored in sessionStorage only (never Firestore). MCP uses GITHUB_TOKEN in the process environment.';
+  ghSection.appendChild(patHelp);
+  const patRow = document.createElement('div');
+  patRow.className = 'settings-rename-row';
+  const patInput = document.createElement('input');
+  patInput.type = 'password';
+  patInput.placeholder = 'ghp_… or github_pat_…';
+  patInput.className = 'settings-rename-input';
+  patInput.value = getSessionGithubPat() || '';
+  const patBtn = document.createElement('button');
+  patBtn.className = 'settings-action-btn';
+  patBtn.textContent = 'Store PAT';
+  patBtn.addEventListener('click', () => {
+    const val = patInput.value.trim();
+    setSessionGithubPat(val || null);
+    patBtn.textContent = val ? 'Stored' : 'Cleared';
+  });
+  patRow.append(patInput, patBtn);
+  ghSection.appendChild(patRow);
+  content.appendChild(ghSection);
 
   // ─── AI Audio Section ───
   const aiAudioSection = createSection('AI Audio (Groq)');
