@@ -22,6 +22,7 @@ import {
   getSessionGithubPat,
   setSessionGithubPat,
 } from '../lib/github-token';
+import { getConfluenceToken, setConfluenceToken, getNotionToken, setNotionToken } from '../lib/wiki-tokens';
 import { isFirebaseConfigured } from '../lib/firebase-config';
 
 let overlayEl: HTMLElement | null = null;
@@ -331,7 +332,7 @@ function renderPanelContent(): void {
   if (!isFirebaseConfigured()) {
     const note = document.createElement('div');
     note.className = 'settings-sublabel';
-    note.textContent = 'Firebase is not configured: cloud sync, GitHub OAuth, and MCP token issuance that needs cloud identity are disabled. Local folders still work.';
+    note.textContent = 'Firebase is not configured: cloud sync, GitHub OAuth, shared workspaces, wiki sync, activity reports, and MCP token issuance that needs cloud identity are disabled. Local folders still work.';
     ghSection.appendChild(note);
   }
   const writeRow = document.createElement('label');
@@ -365,6 +366,36 @@ function renderPanelContent(): void {
   });
   patRow.append(patInput, patBtn);
   ghSection.appendChild(patRow);
+  const wikiHelp = document.createElement('div');
+  wikiHelp.className = 'settings-sublabel';
+  wikiHelp.textContent = 'Confluence and Notion tokens stay in session memory only (never Firestore). MCP: CONFLUENCE_TOKEN / NOTION_TOKEN.';
+  ghSection.appendChild(wikiHelp);
+  const confRow = document.createElement('div');
+  confRow.className = 'settings-rename-row';
+  const confInput = document.createElement('input');
+  confInput.type = 'password';
+  confInput.placeholder = 'Confluence API token';
+  confInput.className = 'settings-rename-input';
+  confInput.value = getConfluenceToken() || '';
+  const confBtn = document.createElement('button');
+  confBtn.className = 'settings-action-btn';
+  confBtn.textContent = 'Store Confluence';
+  confBtn.addEventListener('click', () => setConfluenceToken(confInput.value.trim() || null));
+  confRow.append(confInput, confBtn);
+  ghSection.appendChild(confRow);
+  const notionRow = document.createElement('div');
+  notionRow.className = 'settings-rename-row';
+  const notionInput = document.createElement('input');
+  notionInput.type = 'password';
+  notionInput.placeholder = 'Notion integration token';
+  notionInput.className = 'settings-rename-input';
+  notionInput.value = getNotionToken() || '';
+  const notionBtn = document.createElement('button');
+  notionBtn.className = 'settings-action-btn';
+  notionBtn.textContent = 'Store Notion';
+  notionBtn.addEventListener('click', () => setNotionToken(notionInput.value.trim() || null));
+  notionRow.append(notionInput, notionBtn);
+  ghSection.appendChild(notionRow);
   content.appendChild(ghSection);
 
   // ─── AI Audio Section ───

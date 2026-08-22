@@ -1,7 +1,7 @@
 import type { FileOrigin } from '../../types';
 
-export type ConnectorId = 'github' | 'drive';
-export type ConnectorCapability = 'export' | 'import' | 'list';
+export type ConnectorId = 'github' | 'drive' | 'confluence' | 'notion';
+export type ConnectorCapability = 'export' | 'import' | 'list' | 'sync';
 
 export type ConnectorExportResult =
   | { ok: true; sha: string }
