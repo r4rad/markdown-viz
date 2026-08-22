@@ -1,6 +1,7 @@
 import type { AppState, FileOrigin, FileTab, FolderId, GitHubRepoLink, Role, WorkspaceFolder } from '../types';
 import { emit } from './events';
 import { canWriteWorkspace } from './workspace-acl';
+import { emptyTemplateSettings } from './template-folders';
 import {
   LOCAL_ORIGIN,
   createFolder as createFolderRecord,
@@ -101,6 +102,7 @@ const state: AppState = {
   folders: [],
   activeWorkspaceId: 'personal',
   currentRole: null,
+  templateSettings: emptyTemplateSettings(),
 };
 
 export function canEditActiveWorkspace(): boolean {
@@ -244,6 +246,7 @@ export function restoreState(saved: Partial<AppState>): void {
   if (saved.theme) state.theme = saved.theme;
   if (saved.syncScroll !== undefined) state.syncScroll = saved.syncScroll;
   if (saved.sidebarOpen !== undefined) state.sidebarOpen = saved.sidebarOpen;
+  if (saved.templateSettings) state.templateSettings = saved.templateSettings;
   emit('state-restored', state);
   emit('theme-changed', state.theme);
   emit('active-tab-changed', getActiveTab());
@@ -312,5 +315,15 @@ export function deleteFolder(id: FolderId, mode: DeleteFolderMode): string[] {
 
 export function setFolderRepoLink(id: FolderId, repoLink: GitHubRepoLink | null): void {
   state.folders = setFolderRepoLinkRecord(state.folders, id, repoLink);
+  emit('state-changed', state);
+}
+
+export function replaceFolders(folders: WorkspaceFolder[]): void {
+  state.folders = folders;
+  emit('state-changed', state);
+}
+
+export function setTemplateSettings(settings: import('../types').TemplateSettings): void {
+  state.templateSettings = settings;
   emit('state-changed', state);
 }
