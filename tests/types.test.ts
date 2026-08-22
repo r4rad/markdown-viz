@@ -34,6 +34,7 @@ describe('Type Definitions (Smoke Tests)', () => {
       folders: [],
       activeWorkspaceId: 'personal',
       currentRole: null,
+      templateSettings: { folderByDocType: {} },
     };
     expect(state.tabs).toEqual([]);
     expect(state.activeTabId).toBeNull();
@@ -134,6 +135,7 @@ describe('Type Definitions (Smoke Tests)', () => {
       folders: [],
       activeWorkspaceId: 'personal',
       currentRole: null,
+      templateSettings: { folderByDocType: {} },
     };
     expect(state.tabs.length).toBe(1);
     expect(state.activeTabId).toBe('tab-1');

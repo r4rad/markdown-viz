@@ -54,6 +54,42 @@ export interface ThemeDefinition {
 export type WorkspaceId = string;
 export type Role = 'owner' | 'editor' | 'viewer';
 
+export type DocType =
+  | 'prd'
+  | 'brd'
+  | 'task_breakdown'
+  | 'architecture'
+  | 'meeting_notes'
+  | 'content_plan'
+  | 'strategy'
+  | 'content_calendar'
+  | 'note'
+  | 'research';
+
+export type TemplatePack = 'engineering' | 'marketing' | 'learner';
+
+export interface TemplateMeta {
+  id: string;
+  pack: TemplatePack;
+  docType: DocType;
+  title: string;
+  titlePattern: string;
+  default?: boolean;
+  source: 'builtin' | 'workspace';
+}
+
+export interface ParsedTemplate {
+  meta: TemplateMeta;
+  body: string;
+  raw: string;
+}
+
+export interface TemplateSettings {
+  folderByDocType: Partial<Record<DocType, FolderId>>;
+  captureNoteFolderId?: FolderId;
+  captureResearchFolderId?: FolderId;
+}
+
 // ─── App state ───
 export interface AppState {
   tabs: FileTab[];
@@ -66,6 +102,7 @@ export interface AppState {
   folders: WorkspaceFolder[];
   activeWorkspaceId: string;
   currentRole: Role | null;
+  templateSettings: TemplateSettings;
 }
 
 export interface SharedWorkspace {
