@@ -1,0 +1,21 @@
+{
+  "name": "markdownviz-mcp",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "bin": {
+    "markdownviz-mcp": "./src/index.ts"
+  },
+  "scripts": {
+    "start": "npx tsx src/index.ts"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.12.1"
+  },
+  "devDependencies": {
+    "tsx": "^4.19.4"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
