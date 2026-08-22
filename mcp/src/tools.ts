@@ -43,6 +43,18 @@ export interface Phase2Port {
   recordActivity(event: Record<string, unknown>): Promise<void>;
 }
 
+export interface TemplatePort {
+  list(): Array<{ id: string; pack: string; docType: string; title: string }>;
+  create(input: {
+    uid: string;
+    templateIdOrDocType: string;
+    title: string;
+    folderId?: string;
+    url?: string;
+    workspaceId?: string;
+  }): Promise<{ ok: boolean; fileId?: string; folderId?: string; error?: string }>;
+}
+
 export interface GithubPort {
   getFile(owner: string, repo: string, path: string, ref: string): Promise<{ content: string; sha: string }>;
   listMarkdown(owner: string, repo: string, ref: string | undefined, prefix: string | undefined): Promise<Array<{ path: string; sha: string }>>;
@@ -137,6 +149,27 @@ export const TOOL_DEFS = [
     },
   },
   {
+    name: 'list_templates',
+    description: 'List built-in and workspace template overrides (id, pack, docType, title).',
+    inputSchema: { type: 'object', properties: { workspaceId: { type: 'string' } } },
+  },
+  {
+    name: 'create_from_template',
+    description: 'Create a Markdown file from a template into the mapped folder. Viewers are denied.',
+    inputSchema: {
+      type: 'object',
+      required: ['title'],
+      properties: {
+        docType: { type: 'string' },
+        templateId: { type: 'string' },
+        title: { type: 'string' },
+        folderId: { type: 'string' },
+        workspaceId: { type: 'string' },
+        extra: { type: 'object' },
+      },
+    },
+  },
+  {
     name: 'list_workspaces',
     description: 'List personal plus shared workspace memberships.',
     inputSchema: { type: 'object', properties: {} },
@@ -208,7 +241,7 @@ export const TOOL_DEFS = [
 export async function callTool(
   name: string,
   args: Record<string, unknown>,
-  ctx: { uid: string; githubToken?: string; firestore: FirestorePort; github: GithubPort; phase2?: Phase2Port },
+  ctx: { uid: string; githubToken?: string; firestore: FirestorePort; github: GithubPort; phase2?: Phase2Port; templates?: TemplatePort },
 ): Promise<ToolResult> {
   switch (name) {
     case 'list_tree': {
@@ -396,6 +429,29 @@ export async function callTool(
       const result = await ctx.phase2.queryActivity(ctx.uid, String(args.workspaceId), args);
       if (!result.ok) return err(result.error || 'Owner-only report');
       return ok(result.events || []);
+    }
+    case 'list_templates': {
+      if (!ctx.templates) return err('Templates unavailable');
+      return ok(ctx.templates.list());
+    }
+    case 'create_from_template': {
+      if (!ctx.templates) return err('Templates unavailable');
+      const workspaceId = args.workspaceId ? String(args.workspaceId) : '';
+      if (workspaceId && ctx.phase2) {
+        const role = await ctx.phase2.getRole(ctx.uid, workspaceId);
+        if (role === 'viewer' || !role) return err('Viewers cannot create from templates.');
+      }
+      const extra = (args.extra || {}) as { url?: string };
+      const result = await ctx.templates.create({
+        uid: ctx.uid,
+        templateIdOrDocType: String(args.templateId || args.docType || ''),
+        title: String(args.title),
+        folderId: args.folderId ? String(args.folderId) : undefined,
+        url: extra.url,
+        workspaceId: workspaceId || undefined,
+      });
+      if (!result.ok) return err(result.error || 'Create failed');
+      return ok({ fileId: result.fileId, folderId: result.folderId });
     }
     default:
       return err(`Unknown tool: ${name}`);
