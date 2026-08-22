@@ -10,6 +10,8 @@ Stdio MCP server for listing, reading, and writing the signed-in user’s worksp
 | `MARKDOWNVIZ_FIREBASE_API_KEY` | Web API key used to verify the ID token |
 | `MARKDOWNVIZ_FIREBASE_PROJECT_ID` | Firestore project |
 | `GITHUB_TOKEN` | PAT or OAuth token for linked-repo list/read/save |
+| `CONFLUENCE_TOKEN` | Confluence Cloud API token (never Firestore) |
+| `NOTION_TOKEN` | Notion integration token (never Firestore) |
 | `MARKDOWNVIZ_ALLOW_UNVERIFIED_UID=1` + `MARKDOWNVIZ_USER_ID` | Local-only bypass; never use in production |
 
 PATs stay in the MCP process environment. They are never written to Firestore.
@@ -37,6 +39,9 @@ PATs stay in the MCP process environment. They are never written to Firestore.
 ## Tools
 
 - `list_tree`, `list_folder`, `read_file`, `write_file` (Firestore only)
-- `list_connectors`, `save_to_connector` (`github` live, `drive` → `NOT_IMPLEMENTED`)
+- `list_workspaces`, `invite_member` (owner)
+- `list_versions`, `restore_version` (role-checked)
+- `sync_wiki`, `activity_query` (owner-only)
+- `list_connectors`, `save_to_connector` (`github` live; `confluence`/`notion` sync; `drive` → `NOT_IMPLEMENTED`)
 
 `write_file` on a GitHub-origin document stores a local overlay and does **not** commit. Call `save_to_connector` with `connector: "github"` to commit.

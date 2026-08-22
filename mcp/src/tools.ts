@@ -31,6 +31,18 @@ export interface FirestorePort {
   writeFile(uid: string, file: WorkspaceFileDoc): Promise<void>;
 }
 
+export interface Phase2Port {
+  listWorkspaces(uid: string): Promise<Array<{ id: string; name: string; role: string }>>;
+  inviteMember(uid: string, workspaceId: string, emailOrUid: string, role: string): Promise<{ ok: boolean; error?: string }>;
+  getRole(uid: string, workspaceId: string): Promise<string | null>;
+  listVersions(workspaceId: string, fileId: string): Promise<unknown[]>;
+  restoreVersion(uid: string, workspaceId: string, fileId: string, versionId: string): Promise<{ ok: boolean; error?: string }>;
+  syncWiki(uid: string, args: Record<string, unknown>): Promise<{ ok: boolean; conflict?: boolean; error?: string }>;
+  writeSharedFile(uid: string, workspaceId: string, file: WorkspaceFileDoc): Promise<{ ok: boolean; error?: string }>;
+  queryActivity(uid: string, workspaceId: string, filters: Record<string, unknown>): Promise<{ ok: boolean; error?: string; events?: unknown[] }>;
+  recordActivity(event: Record<string, unknown>): Promise<void>;
+}
+
 export interface GithubPort {
   getFile(owner: string, repo: string, path: string, ref: string): Promise<{ content: string; sha: string }>;
   listMarkdown(owner: string, repo: string, ref: string | undefined, prefix: string | undefined): Promise<Array<{ path: string; sha: string }>>;
@@ -124,12 +136,79 @@ export const TOOL_DEFS = [
       },
     },
   },
+  {
+    name: 'list_workspaces',
+    description: 'List personal plus shared workspace memberships.',
+    inputSchema: { type: 'object', properties: {} },
+  },
+  {
+    name: 'invite_member',
+    description: 'Owner only: invite by email or uid with editor or viewer role.',
+    inputSchema: {
+      type: 'object',
+      required: ['workspaceId', 'emailOrUid', 'role'],
+      properties: {
+        workspaceId: { type: 'string' },
+        emailOrUid: { type: 'string' },
+        role: { type: 'string' },
+      },
+    },
+  },
+  {
+    name: 'list_versions',
+    description: 'List versions newest-first.',
+    inputSchema: {
+      type: 'object',
+      required: ['workspaceId', 'fileId'],
+      properties: { workspaceId: { type: 'string' }, fileId: { type: 'string' } },
+    },
+  },
+  {
+    name: 'restore_version',
+    description: 'Restore a version as editor/owner. Viewers are denied.',
+    inputSchema: {
+      type: 'object',
+      required: ['workspaceId', 'fileId', 'versionId'],
+      properties: {
+        workspaceId: { type: 'string' },
+        fileId: { type: 'string' },
+        versionId: { type: 'string' },
+      },
+    },
+  },
+  {
+    name: 'sync_wiki',
+    description: 'Pull, push, or two-way Confluence/Notion sync. Viewers denied.',
+    inputSchema: {
+      type: 'object',
+      required: ['workspaceId', 'direction', 'connector'],
+      properties: {
+        workspaceId: { type: 'string' },
+        fileId: { type: 'string' },
+        direction: { type: 'string' },
+        connector: { type: 'string' },
+      },
+    },
+  },
+  {
+    name: 'activity_query',
+    description: 'Owner-only workspace activity query.',
+    inputSchema: {
+      type: 'object',
+      required: ['workspaceId'],
+      properties: {
+        workspaceId: { type: 'string' },
+        actorId: { type: 'string' },
+        action: { type: 'string' },
+      },
+    },
+  },
 ];
 
 export async function callTool(
   name: string,
   args: Record<string, unknown>,
-  ctx: { uid: string; githubToken?: string; firestore: FirestorePort; github: GithubPort },
+  ctx: { uid: string; githubToken?: string; firestore: FirestorePort; github: GithubPort; phase2?: Phase2Port },
 ): Promise<ToolResult> {
   switch (name) {
     case 'list_tree': {
@@ -180,6 +259,27 @@ export async function callTool(
     }
     case 'write_file': {
       const now = Date.now();
+      const workspaceId = args.workspaceId ? String(args.workspaceId) : '';
+      if (workspaceId && ctx.phase2) {
+        const role = await ctx.phase2.getRole(ctx.uid, workspaceId);
+        if (role === 'viewer' || !role) return err('Write denied for this shared workspace role.');
+        const existing = args.fileId ? await ctx.firestore.getFile(ctx.uid, String(args.fileId)) : null;
+        const file: WorkspaceFileDoc = {
+          id: existing?.id || String(args.fileId || crypto.randomUUID()),
+          name: String(args.name),
+          content: String(args.content),
+          folderId: (args.folderId as string | null | undefined) ?? existing?.folderId ?? null,
+          origin: existing?.origin ?? { kind: 'local' as const },
+          updatedAt: now,
+          createdAt: existing?.createdAt ?? now,
+        };
+        const written = await ctx.phase2.writeSharedFile(ctx.uid, workspaceId, file);
+        if (!written.ok) return err(written.error || 'Shared write failed');
+        await ctx.phase2.recordActivity({
+          workspaceId, actorId: ctx.uid, action: 'mcp_write', fileId: file.id, source: 'mcp',
+        });
+        return ok({ id: file.id, committed: false, source: 'mcp' });
+      }
       const existing = args.fileId ? await ctx.firestore.getFile(ctx.uid, String(args.fileId)) : null;
       const origin = existing?.origin ?? { kind: 'local' as const };
       const file: WorkspaceFileDoc = {
@@ -203,6 +303,8 @@ export async function callTool(
       return ok([
         { id: 'github', displayName: 'GitHub', available: !!ctx.githubToken },
         { id: 'drive', displayName: 'Google Drive', available: false, stub: true },
+        { id: 'confluence', displayName: 'Confluence Cloud', available: !!process.env.CONFLUENCE_TOKEN },
+        { id: 'notion', displayName: 'Notion', available: !!process.env.NOTION_TOKEN },
       ]);
     }
     case 'save_to_connector': {
@@ -212,6 +314,12 @@ export async function callTool(
           content: [{ type: 'text', text: JSON.stringify({ ok: false, code: 'NOT_IMPLEMENTED', error: 'Google Drive is not implemented in Phase 1.' }) }],
           isError: true,
         };
+      }
+      if (connector === 'confluence' || connector === 'notion') {
+        if (!ctx.phase2) return err('Wiki sync is unavailable');
+        const result = await ctx.phase2.syncWiki(ctx.uid, { ...args, connector });
+        if (!result.ok) return err(result.error || 'Wiki sync failed');
+        return ok(result);
       }
       if (connector !== 'github') return err('Unknown connector');
       if (!ctx.githubToken) return err('GITHUB_TOKEN is required to save to GitHub.');
@@ -251,6 +359,43 @@ export async function callTool(
       } catch (e) {
         return err(e instanceof Error ? e.message : 'GitHub save failed');
       }
+    }
+    case 'list_workspaces': {
+      if (!ctx.phase2) return err('Shared workspaces unavailable');
+      const list = await ctx.phase2.listWorkspaces(ctx.uid);
+      return ok({ personal: true, shared: list });
+    }
+    case 'invite_member': {
+      if (!ctx.phase2) return err('Shared workspaces unavailable');
+      const workspaceId = String(args.workspaceId);
+      const result = await ctx.phase2.inviteMember(ctx.uid, workspaceId, String(args.emailOrUid), String(args.role));
+      if (!result.ok) return err(result.error || 'Invite failed');
+      return ok(result);
+    }
+    case 'list_versions': {
+      if (!ctx.phase2) return err('Versions unavailable');
+      const role = await ctx.phase2.getRole(ctx.uid, String(args.workspaceId));
+      if (!role) return err('Not a member');
+      const versions = await ctx.phase2.listVersions(String(args.workspaceId), String(args.fileId));
+      return ok(versions);
+    }
+    case 'restore_version': {
+      if (!ctx.phase2) return err('Versions unavailable');
+      const result = await ctx.phase2.restoreVersion(ctx.uid, String(args.workspaceId), String(args.fileId), String(args.versionId));
+      if (!result.ok) return err(result.error || 'Restore denied');
+      return ok(result);
+    }
+    case 'sync_wiki': {
+      if (!ctx.phase2) return err('Wiki sync unavailable');
+      const result = await ctx.phase2.syncWiki(ctx.uid, args);
+      if (!result.ok) return err(result.error || 'Sync denied');
+      return ok(result);
+    }
+    case 'activity_query': {
+      if (!ctx.phase2) return err('Activity unavailable');
+      const result = await ctx.phase2.queryActivity(ctx.uid, String(args.workspaceId), args);
+      if (!result.ok) return err(result.error || 'Owner-only report');
+      return ok(result.events || []);
     }
     default:
       return err(`Unknown tool: ${name}`);
