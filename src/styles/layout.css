@@ -1,12 +1,114 @@
-.app-container {
+.workspace-body {
   display: flex;
-  flex-direction: column;
-  height: 100vh;
-  width: 100vw;
-  overflow: hidden;
-  background: var(--bg-primary);
-  color: var(--text-primary);
+  flex: 1;
+  min-height: 0;
 }
+
+.workspace-tree {
+  width: 260px;
+  flex-shrink: 0;
+  border-right: 1px solid var(--border-primary);
+  background: var(--bg-toolbar, var(--bg-primary));
+  overflow: auto;
+  font-size: 12px;
+}
+
+.workspace-tree-collapsed {
+  display: none;
+}
+
+.workspace-tree-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 10px;
+  font-weight: 600;
+  border-bottom: 1px solid var(--border-primary);
+}
+
+.workspace-icon-btn {
+  border: none;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  font-size: 16px;
+}
+
+.workspace-row {
+  padding: 4px 8px;
+  cursor: pointer;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.workspace-row:hover,
+.workspace-row.active {
+  background: var(--bg-hover, rgba(127,127,127,0.15));
+}
+
+.workspace-status {
+  padding: 4px 8px;
+  color: var(--text-muted, #888);
+  min-height: 1.2em;
+}
+
+.workspace-menu {
+  position: fixed;
+  z-index: 1000;
+  background: var(--bg-toolbar, #222);
+  border: 1px solid var(--border-primary);
+  border-radius: 6px;
+  min-width: 180px;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.25);
+}
+
+.workspace-menu button {
+  display: block;
+  width: 100%;
+  text-align: left;
+  background: none;
+  border: none;
+  color: inherit;
+  padding: 8px 12px;
+  cursor: pointer;
+}
+
+.workspace-menu button:hover {
+  background: var(--bg-hover, rgba(127,127,127,0.15));
+}
+
+.workspace-modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.45);
+  z-index: 1100;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.workspace-modal {
+  background: var(--bg-toolbar, #222);
+  color: var(--text-primary);
+  padding: 16px;
+  border-radius: 8px;
+  max-width: 420px;
+}
+
+.workspace-modal-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.workspace-repo-meta {
+  font-size: 11px;
+  color: var(--text-muted, #888);
+  padding: 2px 8px 6px;
+}
+
 
 /* ─── Floating Audio Player ─── */
 .audio-player {

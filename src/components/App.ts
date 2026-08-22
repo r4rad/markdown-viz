@@ -29,7 +29,7 @@ import { synthesizeAndPlay } from '../lib/tts';
 import { getGroqApiKey, generateSummaryWithGroq } from '../lib/groq-summarize';
 import { showChangelogIfNew } from './ChangelogModal';
 import type { AudioControls } from '../lib/tts';
-import type { UserProfile } from '../types';
+import { createWorkspaceTree, hydrateRepoIndexes } from './WorkspaceTree';
 
 
 export async function initApp(): Promise<void> {
@@ -48,6 +48,9 @@ export async function initApp(): Promise<void> {
   // Build UI
   const toolbar = createToolbar();
   const tabBar = createTabBar();
+  const bodyRow = document.createElement('div');
+  bodyRow.className = 'workspace-body';
+  const workspaceTree = createWorkspaceTree();
   const mainArea = document.createElement('div');
   mainArea.className = 'main-area';
 
@@ -58,7 +61,9 @@ export async function initApp(): Promise<void> {
   const audioPlayer = createAudioPlayer();
 
   mainArea.append(editorPane, splitHandle, previewPane);
-  app.append(toolbar, tabBar, createBetaBanner(), mainArea, statusBar, audioPlayer);
+  bodyRow.append(workspaceTree, mainArea);
+  app.append(toolbar, tabBar, createBetaBanner(), bodyRow, statusBar, audioPlayer);
+  await hydrateRepoIndexes();
 
   // Initialize subsystems
   initDiagramModal();
@@ -120,6 +125,7 @@ export async function initApp(): Promise<void> {
   // Layout visibility
   on('layout-changed', () => {
     const state = getState();
+    workspaceTree.classList.toggle('workspace-tree-collapsed', !state.sidebarOpen);
     editorPane.classList.toggle('pane-hidden', !state.showEditor);
     previewPane.classList.toggle('pane-hidden', !state.showPreview);
     splitHandle.classList.toggle('pane-hidden', !(state.showEditor && state.showPreview));

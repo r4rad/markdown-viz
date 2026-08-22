@@ -1,6 +1,6 @@
 import { icon } from './icons';
 import { themes, applyTheme } from '../themes/themes';
-import { getState, setTheme, addTab, toggleSyncScroll, togglePreview, toggleEditor } from '../lib/state';
+import { getState, setTheme, addTab, toggleSyncScroll, togglePreview, toggleEditor, toggleSidebar } from '../lib/state';
 import { emit, on } from '../lib/events';
 import { openSettingsMenu } from './SettingsMenu';
 import { isSharingEnabled } from '../lib/share';
@@ -12,6 +12,7 @@ export function createToolbar(): HTMLElement {
 
   el.innerHTML = `
     <div class="toolbar-brand">
+      <button class="toolbar-btn" data-action="toggle-workspace" title="Workspace">${icon('list')}</button>
       <span class="icon" style="color:var(--accent)">${icon('logo')}</span>
       <span class="brand-text">MarkdownViz</span>
     </div>
@@ -319,6 +320,9 @@ function setupToolbarEvents(toolbar: HTMLElement): void {
         break;
       case 'open-settings':
         openSettingsMenu();
+        break;
+      case 'toggle-workspace':
+        toggleSidebar();
         break;
       default:
         emit('toolbar-action', action);
