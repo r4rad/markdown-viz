@@ -32,6 +32,8 @@ describe('Type Definitions (Smoke Tests)', () => {
       showEditor: true,
       sidebarOpen: false,
       folders: [],
+      activeWorkspaceId: 'personal',
+      currentRole: null,
     };
     expect(state.tabs).toEqual([]);
     expect(state.activeTabId).toBeNull();
@@ -130,6 +132,8 @@ describe('Type Definitions (Smoke Tests)', () => {
       showEditor: true,
       sidebarOpen: true,
       folders: [],
+      activeWorkspaceId: 'personal',
+      currentRole: null,
     };
     expect(state.tabs.length).toBe(1);
     expect(state.activeTabId).toBe('tab-1');

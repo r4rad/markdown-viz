@@ -51,6 +51,9 @@ export interface ThemeDefinition {
   colors: Record<string, string>;
 }
 
+export type WorkspaceId = string;
+export type Role = 'owner' | 'editor' | 'viewer';
+
 // ─── App state ───
 export interface AppState {
   tabs: FileTab[];
@@ -61,6 +64,70 @@ export interface AppState {
   showEditor: boolean;
   sidebarOpen: boolean;
   folders: WorkspaceFolder[];
+  activeWorkspaceId: string;
+  currentRole: Role | null;
+}
+
+export interface SharedWorkspace {
+  id: WorkspaceId;
+  name: string;
+  ownerId: string;
+  createdAt: number;
+  updatedAt: number;
+}
+
+export interface WorkspaceMember {
+  uid: string;
+  email: string | null;
+  role: Role;
+  addedAt: number;
+}
+
+export interface WorkspaceInvite {
+  id: string;
+  email: string;
+  role: Exclude<Role, 'owner'>;
+  createdAt: number;
+}
+
+export interface WikiMapping {
+  id: string;
+  workspaceId: WorkspaceId;
+  folderId?: string;
+  fileId?: string;
+  connector: 'confluence' | 'notion';
+  remote: Record<string, string>;
+  lastSyncAt?: number;
+  lastRemoteChecksum?: string;
+  lastLocalChecksum?: string;
+}
+
+export type VersionSource = 'save' | 'restore' | 'sync' | 'mcp';
+
+export interface DocVersion {
+  id: string;
+  fileId: string;
+  workspaceId: WorkspaceId | 'personal';
+  authorId: string;
+  createdAt: number;
+  source: VersionSource;
+  checksum: string;
+  content?: string;
+  storagePath?: string;
+}
+
+export type ActivityAction = 'edit' | 'restore' | 'sync' | 'mcp_write' | 'invite' | 'role_change' | 'conflict';
+
+export interface ActivityEvent {
+  id: string;
+  workspaceId: WorkspaceId;
+  actorId: string | 'unknown';
+  actorEmail: string | null;
+  action: ActivityAction;
+  fileId?: string;
+  createdAt: number;
+  checksum?: string;
+  meta?: Record<string, string>;
 }
 
 // ─── Auth ───

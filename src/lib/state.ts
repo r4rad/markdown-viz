@@ -1,5 +1,6 @@
-import type { AppState, FileOrigin, FileTab, FolderId, GitHubRepoLink, WorkspaceFolder } from '../types';
+import type { AppState, FileOrigin, FileTab, FolderId, GitHubRepoLink, Role, WorkspaceFolder } from '../types';
 import { emit } from './events';
+import { canWriteWorkspace } from './workspace-acl';
 import {
   LOCAL_ORIGIN,
   createFolder as createFolderRecord,
@@ -98,7 +99,37 @@ const state: AppState = {
   showEditor: true,
   sidebarOpen: false,
   folders: [],
+  activeWorkspaceId: 'personal',
+  currentRole: null,
 };
+
+export function canEditActiveWorkspace(): boolean {
+  if (state.activeWorkspaceId === 'personal' || !state.currentRole) return true;
+  return canWriteWorkspace(state.currentRole);
+}
+
+function rejectViewerWrite(): boolean {
+  if (canEditActiveWorkspace()) return false;
+  emit('workspace-error', 'Viewers cannot edit this shared workspace.');
+  return true;
+}
+
+export function setWorkspaceContext(input: {
+  workspaceId: string;
+  role: Role | null;
+  folders?: WorkspaceFolder[];
+  tabs?: FileTab[];
+}): void {
+  state.activeWorkspaceId = input.workspaceId;
+  state.currentRole = input.role;
+  if (input.folders) state.folders = input.folders;
+  if (input.tabs?.length) {
+    state.tabs = input.tabs;
+    state.activeTabId = input.tabs[0].id;
+  }
+  emit('state-changed', state);
+  emit('active-tab-changed', getActiveTab());
+}
 
 export function getState(): Readonly<AppState> {
   return state;
@@ -155,6 +186,7 @@ export function switchTab(id: string): void {
 }
 
 export function updateTabContent(id: string, content: string): void {
+  if (rejectViewerWrite()) return;
   const tab = state.tabs.find(t => t.id === id);
   if (!tab) return;
   tab.content = content;
@@ -171,6 +203,7 @@ export function updateTabCursor(id: string, pos: number, scrollTop: number): voi
 }
 
 export function updateTabName(id: string, name: string): void {
+  if (rejectViewerWrite()) return;
   const trimmed = name.trim();
   if (!trimmed) return;
   const tab = state.tabs.find(t => t.id === id);
@@ -242,6 +275,7 @@ export function setTabFolder(tabId: string, folderId: FolderId | null): void {
 }
 
 export function addFolder(name: string, parentId: FolderId | null): WorkspaceFolder {
+  if (rejectViewerWrite()) return state.folders[state.folders.length - 1];
   state.folders = createFolderRecord(state.folders, { name, parentId });
   const folder = state.folders[state.folders.length - 1];
   emit('state-changed', state);
@@ -249,6 +283,7 @@ export function addFolder(name: string, parentId: FolderId | null): WorkspaceFol
 }
 
 export function renameFolder(id: FolderId, name: string): void {
+  if (rejectViewerWrite()) return;
   state.folders = renameFolderRecord(state.folders, id, name);
   emit('state-changed', state);
 }
@@ -259,6 +294,7 @@ export function moveFolder(id: FolderId, newParentId: FolderId | null): void {
 }
 
 export function deleteFolder(id: FolderId, mode: DeleteFolderMode): string[] {
+  if (rejectViewerWrite()) return [];
   const result = deleteFolderRecords(state.folders, state.tabs, id, mode);
   state.folders = result.folders;
   state.tabs = result.tabs;

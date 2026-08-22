@@ -7,7 +7,7 @@ import { redactSecrets } from '../src/lib/github-token';
 describe('connectors', () => {
   it('registers github and drive', () => {
     const ids = listConnectors().map(c => c.id);
-    expect(ids).toEqual(['github', 'drive']);
+    expect(ids).toEqual(['github', 'drive', 'confluence', 'notion']);
   });
 
   it('Drive stub is unavailable and NOT_IMPLEMENTED', async () => {
