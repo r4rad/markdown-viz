@@ -23,8 +23,10 @@ import {
   type Firestore,
 } from 'firebase/firestore';
 import firebaseConfig, { isFirebaseConfigured } from './firebase-config';
-import type { UserProfile, FileTab, AppState } from '../types';
+import type { UserProfile, FileTab, AppState, FileOrigin, WorkspaceFolder } from '../types';
 import { emit } from './events';
+import { LOCAL_ORIGIN, migrateTab } from './workspace';
+import { getGithubWritePref, setGithubOauthToken } from './github-token';
 
 let app: FirebaseApp | null = null;
 let auth: Auth | null = null;
@@ -69,7 +71,9 @@ export function initFirebase(): void {
 async function signInWithProvider(provider: GithubAuthProvider | GoogleAuthProvider): Promise<void> {
   if (!auth) return;
   try {
-    await signInWithPopup(auth, provider);
+    const result = await signInWithPopup(auth, provider);
+    const cred = GithubAuthProvider.credentialFromResult(result);
+    if (cred?.accessToken) setGithubOauthToken(cred.accessToken);
   } catch (e) {
     const err = e as AuthError;
     // Fallback to redirect if popup is blocked or unavailable
@@ -90,6 +94,7 @@ async function signInWithProvider(provider: GithubAuthProvider | GoogleAuthProvi
 export async function signInWithGitHub(): Promise<void> {
   const provider = new GithubAuthProvider();
   provider.addScope('read:user');
+  if (getGithubWritePref()) provider.addScope('repo');
   await signInWithProvider(provider);
 }
 
@@ -158,11 +163,31 @@ export async function syncToCloud(state: AppState): Promise<boolean> {
         scrollPreview: tab.scrollPreview,
         updatedAt: tab.updatedAt,
         createdAt: tab.createdAt,
+        folderId: tab.folderId ?? null,
+        origin: tab.origin ?? LOCAL_ORIGIN,
+      });
+    }
+
+    const foldersRef = collection(db, 'users', currentUser.uid, 'folders');
+    const existingFolders = await getDocs(foldersRef);
+    const folderIds = new Set(state.folders.map(f => f.id));
+    for (const d of existingFolders.docs) {
+      if (!folderIds.has(d.id)) await deleteDoc(d.ref);
+    }
+    for (const folder of state.folders) {
+      await setDoc(doc(foldersRef, folder.id), {
+        name: folder.name,
+        parentId: folder.parentId,
+        createdAt: folder.createdAt,
+        updatedAt: folder.updatedAt,
+        repoLink: folder.repoLink ?? null,
       });
     }
 
     if (state.tabs.length > MAX_SYNC_TABS) {
-      console.info(`Cloud sync: synced ${MAX_SYNC_TABS} of ${state.tabs.length} tabs (most recent).`);
+      const notice = `Cloud sync: synced ${MAX_SYNC_TABS} of ${state.tabs.length} tabs (most recent). Local unsynced tabs were kept.`;
+      console.info(notice);
+      emit('sync-cap-notice', notice);
     }
     return true;
   } catch (e) {
@@ -194,10 +219,10 @@ export async function loadFromCloud(): Promise<Partial<AppState> | null> {
     const filesRef = collection(db, 'users', currentUser.uid, 'files');
     const filesSnap = await getDocs(filesRef);
     const tabs: FileTab[] = [];
-    filesSnap.forEach((doc) => {
-      const d = doc.data();
-      tabs.push({
-        id: doc.id,
+    filesSnap.forEach((fileDoc) => {
+      const d = fileDoc.data();
+      tabs.push(migrateTab({
+        id: fileDoc.id,
         name: d.name || 'Untitled.md',
         content: d.content || '',
         cursorPos: d.cursorPos || 0,
@@ -206,11 +231,29 @@ export async function loadFromCloud(): Promise<Partial<AppState> | null> {
         dirty: false,
         updatedAt: d.updatedAt || Date.now(),
         createdAt: d.createdAt || Date.now(),
+        folderId: d.folderId ?? null,
+        origin: (d.origin as FileOrigin) ?? LOCAL_ORIGIN,
+      }));
+    });
+
+    const foldersRef = collection(db, 'users', currentUser.uid, 'folders');
+    const foldersSnap = await getDocs(foldersRef);
+    const folders: WorkspaceFolder[] = [];
+    foldersSnap.forEach((folderDoc) => {
+      const d = folderDoc.data();
+      folders.push({
+        id: folderDoc.id,
+        name: d.name || 'Untitled',
+        parentId: d.parentId ?? null,
+        createdAt: d.createdAt || Date.now(),
+        updatedAt: d.updatedAt || Date.now(),
+        repoLink: d.repoLink ?? null,
       });
     });
 
     return {
       tabs: tabs.length > 0 ? tabs : undefined,
+      folders,
       activeTabId: tabs[0]?.id,
       theme: userData.theme,
       syncScroll: userData.syncScroll,
