@@ -28,6 +28,9 @@ export default defineConfig({
     environment: 'jsdom',
     globals: true,
     include: ['tests/**/*.test.ts'],
+    // Cap parallelism to avoid Windows pool-start timeouts under load
+    maxWorkers: 4,
+    fileParallelism: true,
     coverage: {
       provider: 'v8',
       include: ['src/**/*.ts'],

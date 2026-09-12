@@ -28,6 +28,7 @@ import { saveMapping, listMappings, mappingWithoutSecrets } from '../lib/wiki-ma
 import { computeChecksum } from '../lib/crdt';
 import { startCollaboration, stopCollaboration } from '../lib/crdt';
 import { canQueryWorkspaceActivity, canSyncWiki } from '../lib/workspace-acl';
+import { isWikiSyncEnabled } from '../lib/feature-flags';
 import { openQuickNote, openResearchCapture, openTemplatePicker } from './TemplateUI';
 import type { Role, WikiMapping } from '../types';
 
@@ -97,18 +98,23 @@ export function mountWorkspaceSwitcher(header: HTMLElement): void {
 }
 
 export function workspaceActions(): Array<[string, () => void]> {
-  return [
+  const actions: Array<[string, () => void]> = [
     ['New shared workspace', createWs],
     ['Members…', openMembers],
     ['History…', openHistory],
     ['Activity…', openActivity],
-    ['Wiki map/sync…', openWiki],
-    ...(canEditActiveWorkspace() ? [
+  ];
+  if (isWikiSyncEnabled()) {
+    actions.push(['Wiki map/sync…', openWiki]);
+  }
+  if (canEditActiveWorkspace()) {
+    actions.push(
       ['New from template', openTemplatePicker],
       ['Quick note', openQuickNote],
       ['Save research', openResearchCapture],
-    ] as Array<[string, () => void]> : []),
-  ];
+    );
+  }
+  return actions;
 }
 
 async function createWs() {

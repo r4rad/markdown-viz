@@ -223,6 +223,8 @@ All variables are optional. Copy `.env.example` to `.env.local` and override wha
 | `VITE_EMAILJS_PUBLIC_KEY` | — | EmailJS public key |
 | `VITE_FEEDBACK_EMAIL` | `rad.rafatahmad@gmail.com` | Recipient address for feedback emails |
 | `VITE_ENABLE_SHARING` | `true` | Enable/disable document sharing via URL |
+| `VITE_ENABLE_DRIVE_CONNECTOR` | `false` | Opt-in Google Drive stub export in the workspace tree |
+| `VITE_ENABLE_WIKI_SYNC` | `false` | Opt-in Confluence/Notion wiki sync UI and token fields |
 
 ---
 

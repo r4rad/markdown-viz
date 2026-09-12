@@ -1,6 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
-// Mock getActiveTab and getPreviewElement
 vi.mock('../src/lib/state', () => ({
   getActiveTab: vi.fn(() => ({
     id: 'test-tab',
@@ -33,23 +32,27 @@ vi.mock('../src/components/Preview', () => {
     getPreviewElement: () => el,
     setPreviewEditable: vi.fn(),
     isPreviewEditable: vi.fn(() => false),
-      folders: [],
-    };
+  };
 });
 
+vi.mock('html-docx-js-typescript', () => ({
+  asBlob: vi.fn(async () => new Blob(['docx'], { type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' })),
+}));
+
 describe('Export DOCX', () => {
+  beforeEach(() => {
+    vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {});
+    global.URL.createObjectURL = vi.fn(() => 'blob:test');
+    global.URL.revokeObjectURL = vi.fn();
+  });
+
   it('should export exportDOCX function', async () => {
     const mod = await import('../src/lib/export');
     expect(mod.exportDOCX).toBeTypeOf('function');
   });
 
   it('should not throw when called with valid state', async () => {
-    // Mock URL.createObjectURL and click
-    const mockUrl = 'blob:test';
-    global.URL.createObjectURL = vi.fn(() => mockUrl);
-    global.URL.revokeObjectURL = vi.fn();
-
     const { exportDOCX } = await import('../src/lib/export');
-    await expect(exportDOCX()).resolves.not.toThrow();
+    await expect(exportDOCX()).resolves.toBeUndefined();
   });
 });
