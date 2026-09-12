@@ -10,6 +10,10 @@ interface ImportMetaEnv {
   readonly VITE_MAX_SYNC_TABS: string;
   readonly VITE_AUTO_SYNC_INTERVAL_SECONDS: string;
   readonly VITE_ENABLE_SHARING: string;
+  /** Opt-in: show Google Drive stub export in the workspace tree. Default off. */
+  readonly VITE_ENABLE_DRIVE_CONNECTOR: string;
+  /** Opt-in: show Confluence/Notion wiki sync UI and token fields. Default off. */
+  readonly VITE_ENABLE_WIKI_SYNC: string;
   readonly VITE_EMAILJS_SERVICE_ID: string;
   readonly VITE_EMAILJS_TEMPLATE_ID: string;
   readonly VITE_EMAILJS_PUBLIC_KEY: string;

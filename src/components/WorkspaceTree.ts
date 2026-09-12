@@ -18,6 +18,7 @@ import { getFileContent, listMarkdownFiles } from '../lib/github-api';
 import { loadRepoIndex, repoIndexKey, saveRepoIndex, type RepoIndexEntry } from '../lib/storage';
 import { findTabByGithubPath, normalizePathPrefix } from '../lib/workspace';
 import { driveConnector, githubConnector } from '../lib/connectors';
+import { isDriveConnectorEnabled } from '../lib/feature-flags';
 import type { FolderId, GitHubRepoLink, WorkspaceFolder } from '../types';
 import { mountWorkspaceSwitcher, workspaceActions } from './CollabUI';
 
@@ -210,15 +211,21 @@ export function createWorkspaceTree(): HTMLElement {
     saveGh.textContent = 'Save to GitHub';
     saveGh.addEventListener('click', () => { closeMenus(); saveTabToGithub(tabId).catch(err => setStatus(err.message)); });
     menu.appendChild(saveGh);
-    const saveDrive = document.createElement('button');
-    saveDrive.textContent = 'Export to Drive';
-    saveDrive.addEventListener('click', async () => {
-      closeMenus();
-      const result = await driveConnector.exportFile({ content: '', path: '', message: '' });
-      setStatus(result.ok ? 'Saved' : result.error);
-      if (result.code === 'NOT_IMPLEMENTED') window.alert(result.error);
-    });
-    menu.appendChild(saveDrive);
+    if (isDriveConnectorEnabled()) {
+      const saveDrive = document.createElement('button');
+      saveDrive.textContent = 'Export to Drive';
+      saveDrive.addEventListener('click', async () => {
+        closeMenus();
+        const result = await driveConnector.exportFile({ content: '', path: '', message: '' });
+        if (result.ok) {
+          setStatus('Saved');
+        } else {
+          setStatus(result.error);
+          if (result.code === 'NOT_IMPLEMENTED') window.alert(result.error);
+        }
+      });
+      menu.appendChild(saveDrive);
+    }
     document.body.appendChild(menu);
     setTimeout(() => document.addEventListener('click', closeMenus, { once: true }), 0);
   }

@@ -19,6 +19,14 @@ import { exportMarkdown, exportHTML, exportPDF, exportDOCX } from '../lib/export
 import { beautifyMarkdown } from '../lib/beautifier';
 import { loadTemplateSettings } from '../lib/template-actions';
 import { initAuthUI } from './AuthUI';
+import {
+  initFirebase,
+  isAuthenticated,
+  syncToCloud,
+  getCurrentUser,
+  updateCloudFileName,
+} from '../lib/auth';
+import type { UserProfile } from '../types';
 import { shareDocument, loadSharedDocument, getShareIdFromURL, buildShareURL, triggerSystemShare, isSharingEnabled } from '../lib/share';
 import { computeChecksum, startCollaboration, stopCollaboration, getActiveSession } from '../lib/crdt';
 import { writeSyncLog } from '../lib/sync-log';
