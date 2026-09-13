@@ -52,7 +52,7 @@ export interface ThemeDefinition {
 }
 
 export type WorkspaceId = string;
-export type Role = 'owner' | 'editor' | 'viewer';
+export type Role = 'owner' | 'editor' | 'commentator' | 'viewer';
 
 export type DocType =
   | 'prd'
