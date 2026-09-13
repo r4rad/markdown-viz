@@ -1,0 +1,30 @@
+export type {
+  WorkspaceKind,
+  Role,
+  SyncStatus,
+  Organization,
+  Workspace,
+  Membership,
+  Document,
+  RepositoryLink,
+  SyncJobState,
+  SyncJob,
+  ConflictStatus,
+  ConflictResolution,
+  Conflict,
+  HistoryEventSource,
+  HistoryEvent,
+} from './types';
+
+export {
+  canReadWorkspace,
+  canWriteWorkspace,
+  canCommentWorkspace,
+  canManageMembers,
+  canRestoreVersion,
+  canSyncWiki,
+  canReadActivity,
+  canQueryWorkspaceActivity,
+  activityCreateAllowed,
+  isWorkspaceMember,
+} from './acl';
