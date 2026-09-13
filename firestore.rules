@@ -18,6 +18,9 @@ service cloud.firestore {
         allow read, write: if request.auth != null && request.auth.uid == userId;
       }
 
+      // Membership index for the SPA switcher. Trusted membership mutations
+      // (invite accept / role change) go through Cloud Run — see task 2.3.
+      // Clients may still maintain their own index docs until that API lands.
       match /memberships/{workspaceId} {
         allow read, write: if request.auth != null && request.auth.uid == userId;
       }
@@ -30,39 +33,48 @@ service cloud.firestore {
 
     // Shared team workspaces (Phase 2). Public sharedDocs and CRDT docs stay below.
     match /workspaces/{wsId} {
+      function isSignedIn() {
+        return request.auth != null;
+      }
       function isWsMember() {
-        return request.auth != null
+        return isSignedIn()
           && exists(/databases/$(database)/documents/workspaces/$(wsId)/members/$(request.auth.uid));
       }
       function wsRole() {
         return get(/databases/$(database)/documents/workspaces/$(wsId)/members/$(request.auth.uid)).data.role;
       }
-      function isWsOwner() {
-        return request.auth != null && (
-          resource.data.ownerId == request.auth.uid
-          || get(/databases/$(database)/documents/workspaces/$(wsId)).data.ownerId == request.auth.uid
-        );
+      function wsOwnerId() {
+        return get(/databases/$(database)/documents/workspaces/$(wsId)).data.ownerId;
       }
+      function isWsOwner() {
+        return isSignedIn() && wsOwnerId() == request.auth.uid;
+      }
+      // Markdown body / folder writes: owner + editor only (not commentator/viewer).
       function canEdit() {
         return isWsMember() && (wsRole() == 'owner' || wsRole() == 'editor');
       }
+      // Comment threads: owner, editor, and commentator.
+      function canComment() {
+        return isWsMember() && (
+          wsRole() == 'owner' || wsRole() == 'editor' || wsRole() == 'commentator'
+        );
+      }
 
-      allow read: if request.auth != null && (
+      allow read: if isSignedIn() && (
         resource.data.ownerId == request.auth.uid || isWsMember()
       );
-      allow create: if request.auth != null && request.resource.data.ownerId == request.auth.uid;
-      allow update, delete: if request.auth != null
-        && get(/databases/$(database)/documents/workspaces/$(wsId)).data.ownerId == request.auth.uid;
+      allow create: if isSignedIn() && request.resource.data.ownerId == request.auth.uid;
+      // Owners may update metadata but cannot transfer ownership from the client.
+      allow update: if isWsOwner()
+        && request.resource.data.ownerId == resource.data.ownerId;
+      allow delete: if isWsOwner();
 
+      // Membership is owner-managed today for bootstrap; non-owners are denied.
+      // Invite create/accept and role changes move to Cloud Run in task 2.3 —
+      // clients must not self-enroll into roles once that API is authoritative.
       match /members/{uid} {
-        allow read: if isWsMember()
-          || get(/databases/$(database)/documents/workspaces/$(wsId)).data.ownerId == request.auth.uid;
-        allow create, update, delete: if request.auth != null && (
-          get(/databases/$(database)/documents/workspaces/$(wsId)).data.ownerId == request.auth.uid
-          || (uid == request.auth.uid
-              && request.resource.data.role == 'owner'
-              && get(/databases/$(database)/documents/workspaces/$(wsId)).data.ownerId == request.auth.uid)
-        );
+        allow read: if isWsMember() || isWsOwner();
+        allow create, update, delete: if isWsOwner();
       }
 
       match /folders/{folderId} {
@@ -93,12 +105,40 @@ service cloud.firestore {
         allow create: if isWsMember() && request.resource.data.actorId == request.auth.uid;
         allow update, delete: if false;
       }
+      // Invites: owner-writable until Cloud Run invites API (task 2.3).
       match /invites/{inviteId} {
         allow read: if isWsMember()
-          || (request.auth != null && request.auth.token.email != null
+          || (isSignedIn() && request.auth.token.email != null
               && resource.data.email == request.auth.token.email);
-        allow write: if request.auth != null
-          && get(/databases/$(database)/documents/workspaces/$(wsId)).data.ownerId == request.auth.uid;
+        allow write: if isWsOwner();
+      }
+
+      // Comment threads — commentators may create/reply; viewers may not.
+      match /comments/{threadId} {
+        allow read: if isWsMember();
+        allow create, update: if canComment();
+        allow delete: if canEdit() || (
+          isWsMember() && resource.data.authorId == request.auth.uid
+        );
+      }
+
+      // Backend / Admin SDK only (Cloud Run, Cloud Tasks). Clients: deny writes.
+      match /repoLinks/{linkId} {
+        allow read: if isWsMember();
+        allow write: if false;
+      }
+      match /syncJobs/{jobId} {
+        allow read: if isWsMember();
+        allow write: if false;
+      }
+      match /conflicts/{conflictId} {
+        allow read: if isWsMember();
+        allow write: if false;
+      }
+      // Immutable history metadata + compaction pointers — Admin/backend only.
+      match /history/{eventId} {
+        allow read: if isWsMember();
+        allow write: if false;
       }
     }
 

@@ -8,6 +8,11 @@ export function canWriteWorkspace(role: Role | null | undefined): boolean {
   return role === 'owner' || role === 'editor';
 }
 
+/** Comment threads: owner, editor, commentator — not viewer. */
+export function canCommentWorkspace(role: Role | null | undefined): boolean {
+  return role === 'owner' || role === 'editor' || role === 'commentator';
+}
+
 export function canManageMembers(role: Role | null | undefined): boolean {
   return role === 'owner';
 }

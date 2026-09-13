@@ -18,6 +18,7 @@ describe('workspace ACL (rules matrix)', () => {
 
   it('viewer cannot write; editor and owner can', () => {
     expect(canWriteWorkspace('viewer')).toBe(false);
+    expect(canWriteWorkspace('commentator')).toBe(false);
     expect(canWriteWorkspace('editor')).toBe(true);
     expect(canWriteWorkspace('owner')).toBe(true);
   });
