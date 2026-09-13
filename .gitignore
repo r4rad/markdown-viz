@@ -32,3 +32,6 @@ Thumbs.db
 
 # Test coverage
 coverage
+
+# Local code knowledge graph (graphify)
+graphify-out/

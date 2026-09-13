@@ -12,6 +12,7 @@ import {
   deleteCloudFile,
   getCloudFiles,
 } from '../lib/auth';
+import { allowsPersonalCloudSync } from '../lib/personal-cloud-sync';
 import { restoreState } from '../lib/state';
 import { openFeedbackModal } from './FeedbackModal';
 import { openChangelogModal } from './ChangelogModal';
@@ -122,6 +123,11 @@ function renderPanelContent(): void {
       loadBtn.addEventListener('click', async () => {
         loadBtn.textContent = '📥 Loading...';
         loadBtn.disabled = true;
+        if (!allowsPersonalCloudSync(getState().activeWorkspaceId)) {
+          loadBtn.textContent = '📥 Personal workspace only';
+          setTimeout(() => renderPanelContent(), 1200);
+          return;
+        }
         const c = await loadFromCloud();
         if (c?.tabs?.length) restoreState(c);
         closeSettingsMenu();
