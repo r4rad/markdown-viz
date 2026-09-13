@@ -27,6 +27,7 @@ import type { UserProfile, FileTab, AppState, FileOrigin, WorkspaceFolder } from
 import { emit } from './events';
 import { LOCAL_ORIGIN, migrateTab } from './workspace';
 import { getGithubWritePref, setGithubOauthToken } from './github-token';
+import { planPersonalCloudFileSync } from './personal-cloud-sync';
 
 let app: FirebaseApp | null = null;
 let auth: Auth | null = null;
@@ -138,23 +139,19 @@ export async function syncToCloud(state: AppState): Promise<boolean> {
       updatedAt: Date.now(),
     }, { merge: true });
 
-    // Sync only the most recently updated tabs (up to limit)
-    const sortedTabs = [...state.tabs]
-      .sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0))
-      .slice(0, MAX_SYNC_TABS);
-
     const filesRef = collection(db, 'users', currentUser.uid, 'files');
-
-    // Remove old cloud files not in synced set
     const existingSnap = await getDocs(filesRef);
-    const syncIds = new Set(sortedTabs.map(t => t.id));
-    for (const d of existingSnap.docs) {
-      if (!syncIds.has(d.id)) {
-        await deleteDoc(d.ref);
-      }
-    }
+    const plan = planPersonalCloudFileSync(
+      state.tabs,
+      existingSnap.docs.map((d) => d.id),
+      MAX_SYNC_TABS,
+    );
+    // plan.deleteRemoteIds is always empty (no silent cap deletes); explicit deletes use deleteCloudFile
 
-    for (const tab of sortedTabs) {
+    const tabsById = new Map(state.tabs.map((t) => [t.id, t]));
+    for (const tabId of plan.upsertTabIds) {
+      const tab = tabsById.get(tabId);
+      if (!tab) continue;
       await setDoc(doc(filesRef, tab.id), {
         name: tab.name,
         content: tab.content,
@@ -165,7 +162,7 @@ export async function syncToCloud(state: AppState): Promise<boolean> {
         createdAt: tab.createdAt,
         folderId: tab.folderId ?? null,
         origin: tab.origin ?? LOCAL_ORIGIN,
-      });
+      }, { merge: true });
     }
 
     const foldersRef = collection(db, 'users', currentUser.uid, 'folders');
