@@ -52,7 +52,21 @@ export interface ThemeDefinition {
 }
 
 export type WorkspaceId = string;
-export type Role = 'owner' | 'editor' | 'commentator' | 'viewer';
+
+/** Domain types live in `@markdown-viz/domain`; re-exported here for SPA imports. */
+export type {
+  WorkspaceKind,
+  Role,
+  SyncStatus,
+  Organization,
+  Workspace,
+  Membership,
+  Document,
+  RepositoryLink,
+  SyncJob,
+  Conflict,
+  HistoryEvent,
+} from '@markdown-viz/domain';
 
 export type DocType =
   | 'prd'

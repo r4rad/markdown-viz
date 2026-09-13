@@ -5,6 +5,7 @@ export default defineConfig({
   resolve: {
     alias: {
       '@': resolve(__dirname, 'src'),
+      '@markdown-viz/domain': resolve(__dirname, 'packages/domain/src/index.ts'),
     },
   },
   build: {
