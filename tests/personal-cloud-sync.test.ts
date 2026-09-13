@@ -1,5 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
+  allowsPersonalCloudSync,
+  isPersonalWorkspaceId,
   planPersonalCloudFileSync,
   selectTabsForCloudSync,
 } from '../src/lib/personal-cloud-sync';
@@ -38,5 +40,34 @@ describe('personal cloud sync (safe)', () => {
     );
     expect(plan.upsertTabIds).toEqual(['a']);
     expect(plan.deleteRemoteIds).toEqual([]);
+  });
+});
+
+describe('workspace isolation for personal cloud sync', () => {
+  it('allows personal sync only for the personal workspace id', () => {
+    expect(isPersonalWorkspaceId('personal')).toBe(true);
+    expect(allowsPersonalCloudSync('personal')).toBe(true);
+  });
+
+  it('blocks personal sync after switching to a shared workspace', () => {
+    const sharedWorkspaceId = 'ws-shared-abc';
+    // Simulate: user switched personal → shared; state.tabs are shared docs.
+    expect(allowsPersonalCloudSync(sharedWorkspaceId)).toBe(false);
+    // Planning shared tabs must not imply they are eligible for personal upsert —
+    // callers must gate with allowsPersonalCloudSync before writing users/{uid}/files.
+    const sharedTabs = [
+      { id: 'shared-doc-1', updatedAt: 100 },
+      { id: 'shared-doc-2', updatedAt: 90 },
+    ];
+    const plan = planPersonalCloudFileSync(sharedTabs, [], 10);
+    expect(plan.upsertTabIds).toEqual(['shared-doc-1', 'shared-doc-2']);
+    expect(allowsPersonalCloudSync(sharedWorkspaceId)).toBe(false);
+  });
+
+  it('blocks personal sync for org and guest workspace ids', () => {
+    expect(allowsPersonalCloudSync('org-acme-1')).toBe(false);
+    expect(allowsPersonalCloudSync('guest-invite-9')).toBe(false);
+    expect(allowsPersonalCloudSync(null)).toBe(false);
+    expect(allowsPersonalCloudSync(undefined)).toBe(false);
   });
 });

@@ -1,5 +1,18 @@
 /** Pure helpers for personal cloud file sync (no Firebase). */
 
+/** Personal cloud paths (`users/{uid}/files`) only apply to the personal workspace. */
+export function isPersonalWorkspaceId(workspaceId: string | null | undefined): boolean {
+  return workspaceId === 'personal';
+}
+
+/**
+ * Shared/org/guest workspace state must never be written into personal cloud sync.
+ * WHEN personal sync runs, only the personal workspace may participate.
+ */
+export function allowsPersonalCloudSync(activeWorkspaceId: string | null | undefined): boolean {
+  return isPersonalWorkspaceId(activeWorkspaceId);
+}
+
 export type SyncableTab = { id: string; updatedAt?: number };
 
 export type PersonalCloudFileSyncPlan = {

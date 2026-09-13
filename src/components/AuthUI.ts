@@ -3,7 +3,8 @@ import {
   isFirebaseReady,
   loadFromCloud,
 } from '../lib/auth';
-import { restoreState } from '../lib/state';
+import { allowsPersonalCloudSync } from '../lib/personal-cloud-sync';
+import { getState, restoreState } from '../lib/state';
 import { openSettingsMenu } from './SettingsMenu';
 import type { UserProfile } from '../types';
 
@@ -25,6 +26,8 @@ export function initAuthUI(): void {
     renderAvatarButton(authArea, currentProfile);
     if (currentProfile) {
       loadFromCloud().then((cloudState) => {
+        // Do not clobber shared/org/guest workspace state with personal cloud files.
+        if (!allowsPersonalCloudSync(getState().activeWorkspaceId)) return;
         if (cloudState?.tabs?.length) restoreState(cloudState);
       });
     }

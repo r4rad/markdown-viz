@@ -27,7 +27,8 @@ import type { UserProfile, FileTab, AppState, FileOrigin, WorkspaceFolder } from
 import { emit } from './events';
 import { LOCAL_ORIGIN, migrateTab } from './workspace';
 import { getGithubWritePref, setGithubOauthToken } from './github-token';
-import { planPersonalCloudFileSync } from './personal-cloud-sync';
+import { allowsPersonalCloudSync, planPersonalCloudFileSync } from './personal-cloud-sync';
+import { getState } from './state';
 
 let app: FirebaseApp | null = null;
 let auth: Auth | null = null;
@@ -130,6 +131,8 @@ export function getMaxSyncTabs(): number {
 
 export async function syncToCloud(state: AppState): Promise<boolean> {
   if (!db || !currentUser) return false;
+  // Never write shared/org/guest tabs into users/{uid}/files.
+  if (!allowsPersonalCloudSync(state.activeWorkspaceId)) return false;
   const MAX_SYNC_TABS = getMaxSyncTabs();
   try {
     const userRef = doc(db, 'users', currentUser.uid);
@@ -195,6 +198,7 @@ export async function syncToCloud(state: AppState): Promise<boolean> {
 
 export async function updateCloudFileName(tabId: string, newName: string): Promise<void> {
   if (!db || !currentUser) return;
+  if (!allowsPersonalCloudSync(getState().activeWorkspaceId)) return;
   try {
     const fileRef = doc(db, 'users', currentUser.uid, 'files', tabId);
     const snap = await getDoc(fileRef);
@@ -263,6 +267,7 @@ export async function loadFromCloud(): Promise<Partial<AppState> | null> {
 
 export async function deleteCloudFile(fileId: string): Promise<void> {
   if (!db || !currentUser) return;
+  if (!allowsPersonalCloudSync(getState().activeWorkspaceId)) return;
   try {
     await deleteDoc(doc(db, 'users', currentUser.uid, 'files', fileId));
   } catch (e) {
