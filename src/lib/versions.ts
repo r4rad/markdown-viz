@@ -1,4 +1,4 @@
-import type { DocVersion, VersionSource } from '../types';
+import type { DocVersion, Role, VersionSource } from '../types';
 
 export const VERSION_CAP = 50;
 export const LARGE_SNAPSHOT_BYTES = 800 * 1024;
@@ -70,6 +70,6 @@ export function capVersions(versions: DocVersion[]): DocVersion[] {
   return sorted.filter(v => keptIds.has(v.id));
 }
 
-export function restoreApplies(role: 'owner' | 'editor' | 'viewer' | null): boolean {
+export function restoreApplies(role: Role | null): boolean {
   return role === 'owner' || role === 'editor';
 }

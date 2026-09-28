@@ -481,6 +481,6 @@ async function loadSharedDocFromURL(): Promise<void> {
   if (doc) {
     addTab(doc.name, doc.content);
   }
-  // Clean URL without reload
-  window.history.replaceState(null, '', '/');
+  // Stay on the editor shell. `/` is the landing route.
+  window.history.replaceState(null, '', '/app');
 }

@@ -2294,3 +2294,26 @@
   }
 }
 
+#app.route-entry {
+  overflow: auto;
+}
+
+.route-entry-main {
+  max-width: 40rem;
+  margin: 4rem auto;
+  padding: 0 1.5rem;
+}
+
+.route-entry-main h1 {
+  font-size: 1.75rem;
+  margin-bottom: 0.75rem;
+}
+
+.route-entry-main p {
+  margin-bottom: 0.75rem;
+}
+
+.route-entry-main a {
+  color: var(--accent, #0969da);
+}
+
