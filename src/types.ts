@@ -1,3 +1,5 @@
+import type { Role } from '@markdown-viz/domain';
+
 export type FolderId = string;
 export type FileId = string;
 
