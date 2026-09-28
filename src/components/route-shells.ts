@@ -1,3 +1,5 @@
+import { mountLandingPage } from './LandingPage';
+
 function entryRoot(): HTMLElement {
   const app = document.getElementById('app');
   if (!app) throw new Error('Missing #app');
@@ -13,21 +15,11 @@ function linkToApp(label: string): HTMLAnchorElement {
   return link;
 }
 
-/** Public marketing entry. Full landing UI is added in the landing-page task. */
+/** Public marketing page. The editor shell is `/app`, not this route. */
 export function mountLandingEntry(): void {
-  const app = entryRoot();
-  const main = document.createElement('main');
-  main.className = 'route-entry-main';
-  main.dataset.route = 'landing';
-
-  const heading = document.createElement('h1');
-  heading.textContent = 'MarkdownViz';
-
-  const text = document.createElement('p');
-  text.textContent = 'Markdown workspace for teams.';
-
-  main.append(heading, text, linkToApp('Open editor'));
-  app.append(main);
+  const app = document.getElementById('app');
+  if (!app) throw new Error('Missing #app');
+  mountLandingPage(app);
 }
 
 /** Invite route shell. Server-validated acceptance is a later task. */
