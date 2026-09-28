@@ -374,6 +374,14 @@ Chunk-size warnings for `viz.js` (~1.4 MB) and `editor.js` (~633 KB) are expecte
 
 ---
 
+## Contributing
+
+Feature branches start from `develop`. Pull requests merge into `develop` only — do not push directly to `develop` or `main`. Agents open the pull request and stop for human review.
+
+Workflow and branch rules: [CONTRIBUTING.md](CONTRIBUTING.md) and [`.kiro/specs/team-product-surface/AUTONOMOUS.md`](.kiro/specs/team-product-surface/AUTONOMOUS.md).
+
+---
+
 ## 📄 License
 
 GNU General Public License v3.0
