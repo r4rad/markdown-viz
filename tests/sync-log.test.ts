@@ -26,6 +26,10 @@ vi.mock('firebase/firestore', () => ({
   orderBy: vi.fn(),
 }));
 
+vi.mock('../src/lib/firebase-config', () => ({
+  isFirebaseConfigured: () => true,
+}));
+
 vi.mock('firebase/auth', () => ({
   getAuth: () => ({}),
   onAuthStateChanged: () => {},
