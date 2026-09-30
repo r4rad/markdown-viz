@@ -13,7 +13,13 @@ import { on, emit } from '../lib/events';
 import { DIAGRAM_TYPES, DIAGRAM_LABELS, getDrawTemplate } from '../lib/draw-command';
 import { publishLocalCursor } from '../lib/presence';
 import { remotePresenceExtension, setRemotePresence } from '../lib/remote-cursors';
-import type { FileTab, PresencePeer } from '../types';
+import {
+  commentGutterExtension,
+  setCommentMarks,
+  threadsToGutterMarks,
+} from '../lib/comment-gutter';
+import { focusCommentThread } from './CommentsPanel';
+import type { CommentThread, FileTab, PresencePeer } from '../types';
 
 let view: EditorView | null = null;
 let editorContainer: HTMLElement | null = null;
@@ -197,6 +203,7 @@ function getExtensions(): Extension[] {
     markdown({ base: markdownLanguage, codeLanguages: languages }),
     editableExtension(),
     remotePresenceExtension(),
+    commentGutterExtension(),
     keymap.of([
       ...closeBracketsKeymap,
       ...defaultKeymap,
@@ -313,6 +320,28 @@ export function createEditor(): HTMLElement {
     view.dispatch({
       effects: setRemotePresence.of(peers as PresencePeer[]),
     });
+  });
+
+  on('comment-marks-changed', (threads: unknown) => {
+    if (!view) return;
+    const marks = threadsToGutterMarks(threads as CommentThread[], view.state.doc.toString());
+    view.dispatch({ effects: setCommentMarks.of(marks) });
+  });
+
+  on('request-editor-selection', () => {
+    if (!view) {
+      emit('editor-selection', null);
+      return;
+    }
+    const sel = view.state.selection.main;
+    emit('editor-selection', { from: sel.from, to: sel.to });
+  });
+
+  editorContainer.addEventListener('click', (ev) => {
+    const target = ev.target as HTMLElement | null;
+    const btn = target?.closest?.('.cm-comment-gutter') as HTMLElement | null;
+    const threadId = btn?.dataset?.threadId;
+    if (threadId) focusCommentThread(threadId);
   });
 
   return editorContainer;
