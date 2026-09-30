@@ -1,10 +1,8 @@
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
 import type { AddressInfo } from 'node:net';
-import type http from 'node:http';
 import WebSocket from 'ws';
 import * as Y from 'yjs';
-import { createServer } from '../src/app.js';
-import { clearRooms } from '../src/rooms.js';
+import { createServer, type CollabServer } from '../src/app.js';
 import { clearSnapshotStubs, getSnapshotStub } from '../src/snapshot.js';
 
 function waitOpen(ws: WebSocket): Promise<void> {
@@ -34,13 +32,14 @@ function waitMessage(ws: WebSocket, timeoutMs = 3000): Promise<Buffer> {
 }
 
 describe('collab WebSocket gateway', () => {
-  let server: http.Server;
+  let server: CollabServer;
   let port: number;
   const prevMode = process.env.FIREBASE_AUTH_MODE;
 
   beforeAll(async () => {
     process.env.FIREBASE_AUTH_MODE = 'stub';
     server = createServer();
+    await server.collabReady;
     await new Promise<void>((resolve) => {
       server.listen(0, '127.0.0.1', () => resolve());
     });
@@ -48,7 +47,7 @@ describe('collab WebSocket gateway', () => {
   });
 
   afterEach(() => {
-    clearRooms();
+    server.collabRooms.clear();
     clearSnapshotStubs();
   });
 
@@ -58,9 +57,7 @@ describe('collab WebSocket gateway', () => {
     } else {
       process.env.FIREBASE_AUTH_MODE = prevMode;
     }
-    await new Promise<void>((resolve, reject) => {
-      server.close((err) => (err ? reject(err) : resolve()));
-    });
+    await server.collabClose();
   });
 
   it('rejects upgrade when token is missing', async () => {
@@ -84,7 +81,6 @@ describe('collab WebSocket gateway', () => {
 
     await Promise.all([waitOpen(a), waitOpen(b)]);
 
-    // Drain optional initial state frames (empty rooms send nothing meaningful).
     const yA = new Y.Doc();
     const yB = new Y.Doc();
     const textA = yA.getText('content');
@@ -111,7 +107,6 @@ describe('collab WebSocket gateway', () => {
     });
 
     await bGotUpdate;
-    // Allow apply
     await new Promise((r) => setTimeout(r, 50));
 
     expect(textB.toString()).toBe('hello from alice');

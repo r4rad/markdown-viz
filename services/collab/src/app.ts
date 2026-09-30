@@ -1,14 +1,10 @@
 import http, { type IncomingMessage, type ServerResponse } from 'node:http';
+import { randomUUID } from 'node:crypto';
 import { WebSocketServer, type WebSocket } from 'ws';
 import { extractToken, verifyFirebaseIdToken, type AuthUser } from './middleware/auth.js';
-import {
-  applyAndBroadcast,
-  encodeRoomState,
-  joinRoom,
-  leaveRoom,
-  type RoomClient,
-} from './rooms.js';
+import { RoomRegistry, type RoomClient } from './rooms.js';
 import { persistSnapshotStub } from './snapshot.js';
+import type { PubSubAdapter } from './pubsub.js';
 
 const DOC_PATH = /^\/doc\/([^/?#]+)$/;
 
@@ -44,12 +40,34 @@ async function handleHttp(req: IncomingMessage, res: ServerResponse): Promise<vo
   sendJson(res, 404, { error: 'not_found' });
 }
 
-function attachSocket(ws: WebSocket, documentId: string, user: AuthUser): void {
-  const client: RoomClient = { ws, uid: user.uid };
-  const room = joinRoom(documentId, client);
+export type CreateServerOptions = {
+  /** Isolated room map (required for multi-instance tests in one process). */
+  rooms?: RoomRegistry;
+  /** Cross-instance pub/sub (Redis or shared MemoryPubSub). */
+  pubsub?: PubSubAdapter;
+  instanceId?: string;
+};
 
-  // Send current room state so the client catches up.
-  const state = encodeRoomState(room);
+export type CollabServer = http.Server & {
+  collabRooms: RoomRegistry;
+  collabPubSub: PubSubAdapter | null;
+  collabInstanceId: string;
+  /** Await after createServer when pubsub.start is async. */
+  collabReady: Promise<void>;
+  collabClose: () => Promise<void>;
+};
+
+function attachSocket(
+  ws: WebSocket,
+  documentId: string,
+  user: AuthUser,
+  rooms: RoomRegistry,
+  pubsub: PubSubAdapter | null,
+): void {
+  const client: RoomClient = { ws, uid: user.uid };
+  const room = rooms.joinRoom(documentId, client);
+
+  const state = rooms.encodeRoomState(room);
   if (state.byteLength > 0 && ws.readyState === ws.OPEN) {
     ws.send(state);
   }
@@ -64,21 +82,25 @@ function attachSocket(ws: WebSocket, documentId: string, user: AuthUser): void {
     if (!isBinary && buf.length === 0) return;
     const update = new Uint8Array(buf);
     if (update.byteLength === 0) return;
-    applyAndBroadcast(room, update, client);
+    rooms.applyAndBroadcast(room, update, client);
+    if (pubsub) {
+      void pubsub.publish(documentId, update).catch((err: unknown) => {
+        console.error('pubsub publish failed', err);
+      });
+    }
   });
 
   ws.on('close', () => {
-    leaveRoom(documentId, client);
+    rooms.leaveRoom(documentId, client);
   });
 }
 
-export type CreateServerOptions = {
-  /** Optional hook after server creation (tests). */
-  noListen?: boolean;
-};
-
 /** Create HTTP + WebSocket server (no listen) for Cloud Run / tests. */
-export function createServer(_options: CreateServerOptions = {}): http.Server {
+export function createServer(options: CreateServerOptions = {}): CollabServer {
+  const rooms = options.rooms ?? new RoomRegistry();
+  const pubsub = options.pubsub ?? null;
+  const instanceId = options.instanceId ?? pubsub?.instanceId ?? randomUUID();
+
   const server = http.createServer((req, res) => {
     void handleHttp(req, res).catch((err: unknown) => {
       console.error(err);
@@ -86,7 +108,11 @@ export function createServer(_options: CreateServerOptions = {}): http.Server {
         sendJson(res, 500, { error: 'internal_error' });
       }
     });
-  });
+  }) as CollabServer;
+
+  server.collabRooms = rooms;
+  server.collabPubSub = pubsub;
+  server.collabInstanceId = instanceId;
 
   const wss = new WebSocketServer({ noServer: true });
 
@@ -114,13 +140,27 @@ export function createServer(_options: CreateServerOptions = {}): http.Server {
 
       wss.handleUpgrade(req, socket, head, (ws) => {
         wss.emit('connection', ws, req);
-        attachSocket(ws, documentId, auth.user);
+        attachSocket(ws, documentId, auth.user, rooms, pubsub);
       });
     })().catch((err: unknown) => {
       console.error(err);
       socket.destroy();
     });
   });
+
+  server.collabReady = pubsub
+    ? pubsub.start((documentId, update) => {
+        rooms.applyFromRemote(documentId, update);
+      })
+    : Promise.resolve();
+
+  server.collabClose = async () => {
+    await pubsub?.stop();
+    rooms.clear();
+    await new Promise<void>((resolve, reject) => {
+      server.close((err) => (err ? reject(err) : resolve()));
+    });
+  };
 
   return server;
 }

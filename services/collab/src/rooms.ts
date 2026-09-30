@@ -13,61 +13,113 @@ export type Room = {
   clients: Set<RoomClient>;
 };
 
-const rooms = new Map<string, Room>();
+/** Per-gateway room map so multiple instances in one process stay isolated. */
+export class RoomRegistry {
+  private readonly rooms = new Map<string, Room>();
+
+  getOrCreateRoom(documentId: string): Room {
+    let room = this.rooms.get(documentId);
+    if (!room) {
+      room = { documentId, ydoc: new Y.Doc(), clients: new Set() };
+      this.rooms.set(documentId, room);
+    }
+    return room;
+  }
+
+  getRoom(documentId: string): Room | undefined {
+    return this.rooms.get(documentId);
+  }
+
+  joinRoom(documentId: string, client: RoomClient): Room {
+    const room = this.getOrCreateRoom(documentId);
+    room.clients.add(client);
+    return room;
+  }
+
+  leaveRoom(documentId: string, client: RoomClient): void {
+    const room = this.rooms.get(documentId);
+    if (!room) return;
+    room.clients.delete(client);
+    if (room.clients.size === 0) {
+      room.ydoc.destroy();
+      this.rooms.delete(documentId);
+    }
+  }
+
+  /** Apply a Yjs update from one local client and broadcast to local peers. */
+  applyAndBroadcast(room: Room, update: Uint8Array, from: RoomClient): void {
+    Y.applyUpdate(room.ydoc, update, from);
+    for (const peer of room.clients) {
+      if (peer === from) continue;
+      if (peer.ws.readyState === peer.ws.OPEN) {
+        peer.ws.send(update);
+      }
+    }
+    persistSnapshotStub(room.documentId, room.ydoc, room.clients.size);
+  }
+
+  /**
+   * Apply an update that arrived via Redis (or another instance).
+   * Broadcasts to local sockets only — does not re-publish.
+   */
+  applyFromRemote(documentId: string, update: Uint8Array): void {
+    const room = this.getOrCreateRoom(documentId);
+    Y.applyUpdate(room.ydoc, update, 'redis');
+    for (const peer of room.clients) {
+      if (peer.ws.readyState === peer.ws.OPEN) {
+        peer.ws.send(update);
+      }
+    }
+    persistSnapshotStub(documentId, room.ydoc, room.clients.size);
+  }
+
+  encodeRoomState(room: Room): Uint8Array {
+    return Y.encodeStateAsUpdate(room.ydoc);
+  }
+
+  clear(): void {
+    for (const room of this.rooms.values()) {
+      room.ydoc.destroy();
+    }
+    this.rooms.clear();
+  }
+}
+
+/** Default registry used when createServer is called without options (single-instance). */
+const defaultRegistry = new RoomRegistry();
 
 export function getOrCreateRoom(documentId: string): Room {
-  let room = rooms.get(documentId);
-  if (!room) {
-    room = { documentId, ydoc: new Y.Doc(), clients: new Set() };
-    rooms.set(documentId, room);
-  }
-  return room;
+  return defaultRegistry.getOrCreateRoom(documentId);
 }
 
 export function getRoom(documentId: string): Room | undefined {
-  return rooms.get(documentId);
+  return defaultRegistry.getRoom(documentId);
 }
 
 export function joinRoom(documentId: string, client: RoomClient): Room {
-  const room = getOrCreateRoom(documentId);
-  room.clients.add(client);
-  return room;
+  return defaultRegistry.joinRoom(documentId, client);
 }
 
 export function leaveRoom(documentId: string, client: RoomClient): void {
-  const room = rooms.get(documentId);
-  if (!room) return;
-  room.clients.delete(client);
-  if (room.clients.size === 0) {
-    room.ydoc.destroy();
-    rooms.delete(documentId);
-  }
+  defaultRegistry.leaveRoom(documentId, client);
 }
 
-/** Apply a Yjs update from one client and broadcast binary frames to peers. */
 export function applyAndBroadcast(
   room: Room,
   update: Uint8Array,
   from: RoomClient,
 ): void {
-  Y.applyUpdate(room.ydoc, update, from);
-  for (const peer of room.clients) {
-    if (peer === from) continue;
-    if (peer.ws.readyState === peer.ws.OPEN) {
-      peer.ws.send(update);
-    }
-  }
-  persistSnapshotStub(room.documentId, room.ydoc, room.clients.size);
+  defaultRegistry.applyAndBroadcast(room, update, from);
 }
 
-/** Encode current room state for a newly joined client. */
+export function applyFromRemote(documentId: string, update: Uint8Array): void {
+  defaultRegistry.applyFromRemote(documentId, update);
+}
+
 export function encodeRoomState(room: Room): Uint8Array {
-  return Y.encodeStateAsUpdate(room.ydoc);
+  return defaultRegistry.encodeRoomState(room);
 }
 
 export function clearRooms(): void {
-  for (const room of rooms.values()) {
-    room.ydoc.destroy();
-  }
-  rooms.clear();
+  defaultRegistry.clear();
 }
