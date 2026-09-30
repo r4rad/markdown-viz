@@ -1,5 +1,11 @@
 import http, { type IncomingMessage, type ServerResponse } from 'node:http';
 import { requireAuth } from './middleware/auth.js';
+import {
+  acceptInvite,
+  createInvite,
+  listWorkspaceInvites,
+} from './invites/handlers.js';
+import { getInviteStore, setInviteStore, type InviteStore } from './invites/store.js';
 
 function sendJson(res: ServerResponse, status: number, body: unknown): void {
   const payload = JSON.stringify(body);
@@ -9,6 +15,24 @@ function sendJson(res: ServerResponse, status: number, body: unknown): void {
   });
   res.end(payload);
 }
+
+async function readJsonBody(req: IncomingMessage): Promise<unknown> {
+  const chunks: Buffer[] = [];
+  for await (const chunk of req) {
+    chunks.push(typeof chunk === 'string' ? Buffer.from(chunk) : chunk);
+  }
+  const raw = Buffer.concat(chunks).toString('utf8').trim();
+  if (!raw) return {};
+  try {
+    return JSON.parse(raw) as unknown;
+  } catch {
+    return { __parseError: true };
+  }
+}
+
+export type CreateServerOptions = {
+  inviteStore?: InviteStore;
+};
 
 async function handleRequest(req: IncomingMessage, res: ServerResponse): Promise<void> {
   const host = req.headers.host ?? 'localhost';
@@ -21,13 +45,65 @@ async function handleRequest(req: IncomingMessage, res: ServerResponse): Promise
     return;
   }
 
-  // Authenticated surface placeholder — real /v1/* routes land in later tasks.
   if (pathname.startsWith('/v1/')) {
     const auth = await requireAuth(req);
     if (!auth.ok) {
       sendJson(res, auth.status, { error: auth.error });
       return;
     }
+
+    const store = getInviteStore();
+
+    if (method === 'POST' && pathname === '/v1/invites') {
+      const body = await readJsonBody(req);
+      if (body && typeof body === 'object' && '__parseError' in body) {
+        sendJson(res, 400, { error: 'invalid_json' });
+        return;
+      }
+      const result = await createInvite(auth.user, body, store);
+      if (!result.ok) {
+        sendJson(res, result.status, { error: result.error });
+        return;
+      }
+      sendJson(res, 201, {
+        id: result.invite.id,
+        workspaceId: result.invite.workspaceId,
+        email: result.invite.email,
+        role: result.invite.role,
+        status: result.invite.status,
+        acceptPath: result.acceptPath,
+      });
+      return;
+    }
+
+    const acceptMatch = /^\/v1\/invites\/([^/]+)\/accept$/.exec(pathname);
+    if (method === 'POST' && acceptMatch) {
+      const inviteId = decodeURIComponent(acceptMatch[1]!);
+      const result = await acceptInvite(auth.user, inviteId, store);
+      if (!result.ok) {
+        sendJson(res, result.status, { error: result.error });
+        return;
+      }
+      sendJson(res, 200, {
+        workspaceId: result.workspaceId,
+        role: result.role,
+        uid: result.membershipUid,
+      });
+      return;
+    }
+
+    const listMatch = /^\/v1\/workspaces\/([^/]+)\/invites$/.exec(pathname);
+    if (method === 'GET' && listMatch) {
+      const workspaceId = decodeURIComponent(listMatch[1]!);
+      const result = await listWorkspaceInvites(auth.user, workspaceId, store);
+      if (!result.ok) {
+        sendJson(res, result.status, { error: result.error });
+        return;
+      }
+      sendJson(res, 200, { invites: result.invites });
+      return;
+    }
+
     sendJson(res, 404, { error: 'not_found', uid: auth.user.uid });
     return;
   }
@@ -36,7 +112,11 @@ async function handleRequest(req: IncomingMessage, res: ServerResponse): Promise
 }
 
 /** Create the HTTP server (no listen) for Cloud Run / tests. */
-export function createServer(): http.Server {
+export function createServer(options: CreateServerOptions = {}): http.Server {
+  if (options.inviteStore) {
+    setInviteStore(options.inviteStore);
+  }
+
   return http.createServer((req, res) => {
     void handleRequest(req, res).catch((err: unknown) => {
       console.error(err);

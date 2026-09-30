@@ -19,8 +19,9 @@ service cloud.firestore {
       }
 
       // Membership index for the SPA switcher. Trusted membership mutations
-      // (invite accept / role change) go through Cloud Run — see task 2.3.
-      // Clients may still maintain their own index docs until that API lands.
+      // (invite accept / role change) go through Cloud Run.
+      // Clients may still maintain their own index docs when the Admin SDK
+      // has already written workspace membership.
       match /memberships/{workspaceId} {
         allow read, write: if request.auth != null && request.auth.uid == userId;
       }
@@ -79,12 +80,17 @@ service cloud.firestore {
         && request.resource.data.ownerId == resource.data.ownerId;
       allow delete: if isWsOwner();
 
-      // Membership is owner-managed today for bootstrap; non-owners are denied.
-      // Invite create/accept and role changes move to Cloud Run in task 2.3 —
-      // clients must not self-enroll into roles once that API is authoritative.
+      // Membership: owners may manage other members from the client panel.
+      // Clients must not self-enroll — create of members/{ownUid} is denied
+      // unless the actor is already the workspace owner (bootstrap only).
       match /members/{uid} {
         allow read: if isWsMember() || isWsOwner();
-        allow create, update, delete: if isWsOwner();
+        allow create: if isWsOwner() && (
+          uid == request.auth.uid
+            ? request.resource.data.role == 'owner'
+            : true
+        );
+        allow update, delete: if isWsOwner() && uid != request.auth.uid;
       }
 
       match /folders/{folderId} {
@@ -115,12 +121,12 @@ service cloud.firestore {
         allow create: if isWsMember() && request.resource.data.actorId == request.auth.uid;
         allow update, delete: if false;
       }
-      // Invites: owner-writable until Cloud Run invites API (task 2.3).
+      // Invites: Cloud Run / Admin SDK only (POST /v1/invites). Clients cannot write.
       match /invites/{inviteId} {
         allow read: if isWsMember()
           || (isSignedIn() && request.auth.token.email != null
               && resource.data.email == request.auth.token.email);
-        allow write: if isWsOwner();
+        allow write: if false;
       }
 
       // Comment threads — commentators may create/reply; viewers may not.
