@@ -31,6 +31,16 @@ service cloud.firestore {
       }
     }
 
+    // Organizations (TPS 2.1) — minimal create/read for org-backed workspaces.
+    match /organizations/{orgId} {
+      allow read: if request.auth != null
+        && resource.data.ownerId == request.auth.uid;
+      allow create: if request.auth != null
+        && request.resource.data.ownerId == request.auth.uid;
+      allow update, delete: if request.auth != null
+        && resource.data.ownerId == request.auth.uid;
+    }
+
     // Shared team workspaces (Phase 2). Public sharedDocs and CRDT docs stay below.
     match /workspaces/{wsId} {
       function isSignedIn() {

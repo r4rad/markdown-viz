@@ -1,4 +1,4 @@
-import type { Role } from '@markdown-viz/domain';
+import type { Role, WorkspaceKind } from '@markdown-viz/domain';
 
 export type FolderId = string;
 export type FileId = string;
@@ -123,7 +123,10 @@ export interface AppState {
 
 export interface SharedWorkspace {
   id: WorkspaceId;
+  /** personal | organization | guest — legacy docs without kind normalize to organization. */
+  kind: WorkspaceKind;
   name: string;
+  orgId?: string;
   ownerId: string;
   createdAt: number;
   updatedAt: number;
