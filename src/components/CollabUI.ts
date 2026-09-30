@@ -33,6 +33,7 @@ import { startCollaboration, stopCollaboration } from '../lib/crdt';
 import { canQueryWorkspaceActivity, canSyncWiki } from '../lib/workspace-acl';
 import { isWikiSyncEnabled } from '../lib/feature-flags';
 import { openQuickNote, openResearchCapture, openTemplatePicker } from './TemplateUI';
+import { toggleCommentsPanel } from './CommentsPanel';
 import type { Role, WikiMapping } from '../types';
 
 let personalSnapshot: { folders: typeof getState extends () => infer S ? never : never } | null = null;
@@ -106,6 +107,7 @@ export function workspaceActions(): Array<[string, () => void]> {
   const actions: Array<[string, () => void]> = [
     ['New organization…', createOrgWs],
     ['Members…', openMembers],
+    ['Comments…', openComments],
     ['History…', openHistory],
     ['Activity…', openActivity],
   ];
@@ -135,6 +137,10 @@ async function createOrgWs() {
     await recordActivity({ workspaceId: ws.id, action: 'invite', meta: { kind: 'organization' } });
     window.alert('Organization workspace created.');
   }
+}
+
+function openComments() {
+  toggleCommentsPanel();
 }
 
 function modal(html: string): HTMLElement {

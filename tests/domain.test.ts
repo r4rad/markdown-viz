@@ -12,6 +12,7 @@ import {
   type Conflict,
   type HistoryEvent,
   type Workspace,
+  type CommentThread,
 } from '@markdown-viz/domain';
 
 const WORKSPACE_KINDS: WorkspaceKind[] = ['personal', 'organization', 'guest'];
@@ -72,6 +73,24 @@ describe('domain package types', () => {
     expect(job.state).toBe('queued');
     expect(conflict.status).toBe('open');
     expect(event.source).toBe('save');
+  });
+
+  it('accepts CommentThread with Yjs-relative anchor payload', () => {
+    const thread: CommentThread = {
+      id: 'ct1',
+      documentId: 'd1',
+      workspaceId: 'ws-1',
+      anchor: { kind: 'yjs-relative', start: { type: null, tname: null, item: null, assoc: 0 }, end: { type: null, tname: null, item: null, assoc: 0 } },
+      quote: 'Hello',
+      resolved: false,
+      authorId: 'u1',
+      authorEmail: null,
+      createdAt: 1,
+      updatedAt: 1,
+      messages: [],
+    };
+    expect(thread.resolved).toBe(false);
+    expect(thread.anchor).toBeTruthy();
   });
 });
 

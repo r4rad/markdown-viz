@@ -14,6 +14,9 @@ export type {
   Conflict,
   HistoryEventSource,
   HistoryEvent,
+  CommentAnchor,
+  CommentMessage,
+  CommentThread,
 } from './types';
 
 export {

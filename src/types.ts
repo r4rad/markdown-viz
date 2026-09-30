@@ -68,6 +68,9 @@ export type {
   SyncJob,
   Conflict,
   HistoryEvent,
+  CommentAnchor,
+  CommentMessage,
+  CommentThread,
 } from '@markdown-viz/domain';
 
 export type DocType =

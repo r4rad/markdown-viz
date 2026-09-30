@@ -70,7 +70,9 @@ export async function initApp(): Promise<void> {
   const audioPlayer = createAudioPlayer();
 
   mainArea.append(editorPane, splitHandle, previewPane);
-  bodyRow.append(workspaceTree, mainArea);
+  const { createCommentsPanel } = await import('./CommentsPanel');
+  const commentsPanel = createCommentsPanel();
+  bodyRow.append(workspaceTree, mainArea, commentsPanel);
   app.append(toolbar, tabBar, createBetaBanner(), bodyRow, statusBar, audioPlayer);
   await hydrateRepoIndexes();
 

@@ -101,3 +101,29 @@ export interface HistoryEvent {
   deltaPath?: string;
   gitSha?: string;
 }
+
+/** Yjs relative-position payloads (not raw offsets as sole truth). */
+export type CommentAnchor = unknown;
+
+export interface CommentMessage {
+  id: string;
+  authorId: string;
+  authorEmail: string | null;
+  body: string;
+  createdAt: number;
+}
+
+export interface CommentThread {
+  id: string;
+  documentId: string;
+  workspaceId: string;
+  /** Yjs relative position payloads (not character offsets alone). */
+  anchor: CommentAnchor;
+  quote: string;
+  resolved: boolean;
+  authorId: string;
+  authorEmail: string | null;
+  createdAt: number;
+  updatedAt: number;
+  messages: CommentMessage[];
+}
