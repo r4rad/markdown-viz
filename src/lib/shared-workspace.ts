@@ -15,6 +15,16 @@ import {
 } from 'firebase/firestore';
 import { getApp } from 'firebase/app';
 import { emit } from './events';
+import {
+  buildOrganizationCreatePayload,
+  normalizeWorkspaceKind,
+} from './workspace-kinds';
+
+export {
+  buildGuestWorkspaceStub,
+  workspaceSwitcherLabel,
+  normalizeWorkspaceKind,
+} from './workspace-kinds';
 
 function db() {
   if (!isFirebaseConfigured()) return null;
@@ -39,35 +49,55 @@ export function copyTreeToWorkspacePayload(folders: WorkspaceFolder[], tabs: Fil
   };
 }
 
-export async function createSharedWorkspace(name: string, folders: WorkspaceFolder[], tabs: FileTab[]): Promise<SharedWorkspace | null> {
+/**
+ * Create an organization workspace: persists kind=organization, orgId, and owner membership.
+ */
+export async function createOrganizationWorkspace(
+  name: string,
+  folders: WorkspaceFolder[],
+  tabs: FileTab[],
+): Promise<SharedWorkspace | null> {
   const user = getCurrentUser();
   const firestore = db();
   if (!user || !firestore) {
-    emit('workspace-error', 'Sign in with Firebase to create a shared workspace.');
+    emit('workspace-error', 'Sign in with Firebase to create an organization workspace.');
     return null;
   }
-  const now = Date.now();
-  const id = crypto.randomUUID();
-  const ws: SharedWorkspace = { id, name: name.trim() || 'Shared workspace', ownerId: user.uid, createdAt: now, updatedAt: now };
-  const wsRef = doc(firestore, 'workspaces', id);
-  await setDoc(wsRef, ws);
-  await setDoc(doc(firestore, 'workspaces', id, 'members', user.uid), {
-    uid: user.uid,
-    email: user.email,
-    role: 'owner',
-    addedAt: now,
+  const payload = buildOrganizationCreatePayload({
+    workspaceId: crypto.randomUUID(),
+    orgId: crypto.randomUUID(),
+    name,
+    ownerId: user.uid,
+    ownerEmail: user.email,
+    now: Date.now(),
   });
-  await setDoc(doc(firestore, 'users', user.uid, 'memberships', id), {
-    workspaceId: id, name: ws.name, role: 'owner',
-  });
-  const payload = copyTreeToWorkspacePayload(folders, tabs);
-  for (const folder of payload.folders) {
-    await setDoc(doc(firestore, 'workspaces', id, 'folders', folder.id), folder);
+  await setDoc(doc(firestore, 'organizations', payload.organization.id), payload.organization);
+  await setDoc(doc(firestore, 'workspaces', payload.workspace.id), payload.workspace);
+  await setDoc(
+    doc(firestore, 'workspaces', payload.workspace.id, 'members', user.uid),
+    payload.membership,
+  );
+  await setDoc(
+    doc(firestore, 'users', user.uid, 'memberships', payload.workspace.id),
+    payload.userMembership,
+  );
+  const tree = copyTreeToWorkspacePayload(folders, tabs);
+  for (const folder of tree.folders) {
+    await setDoc(doc(firestore, 'workspaces', payload.workspace.id, 'folders', folder.id), folder);
   }
-  for (const file of payload.files) {
-    await setDoc(doc(firestore, 'workspaces', id, 'files', file.id), file);
+  for (const file of tree.files) {
+    await setDoc(doc(firestore, 'workspaces', payload.workspace.id, 'files', file.id), file);
   }
-  return ws;
+  return payload.workspace;
+}
+
+/** Prefer createOrganizationWorkspace — still creates kind=organization. */
+export async function createSharedWorkspace(
+  name: string,
+  folders: WorkspaceFolder[],
+  tabs: FileTab[],
+): Promise<SharedWorkspace | null> {
+  return createOrganizationWorkspace(name, folders, tabs);
 }
 
 export async function listMemberships(): Promise<Array<SharedWorkspace & { role: string }>> {
@@ -81,7 +111,12 @@ export async function listMemberships(): Promise<Array<SharedWorkspace & { role:
     const wsDoc = await getDoc(doc(firestore, 'workspaces', wsId));
     if (!wsDoc.exists()) continue;
     const data = wsDoc.data() as SharedWorkspace;
-    out.push({ ...data, id: wsId, role: m.data().role });
+    out.push({
+      ...data,
+      id: wsId,
+      kind: normalizeWorkspaceKind(data.kind),
+      role: m.data().role,
+    });
   }
   return out;
 }

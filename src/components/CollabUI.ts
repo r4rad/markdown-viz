@@ -3,7 +3,7 @@ import { on } from '../lib/events';
 import { isFirebaseConfigured } from '../lib/firebase-config';
 import { isAuthenticated, getCurrentUser } from '../lib/auth';
 import {
-  createSharedWorkspace,
+  createOrganizationWorkspace,
   listMemberships,
   loadSharedTree,
   inviteMember,
@@ -14,6 +14,7 @@ import {
   acceptPendingInvites,
   setDocCollaborators,
   syncSharedFile,
+  workspaceSwitcherLabel,
 } from '../lib/shared-workspace';
 import { listVersions, recordVersion } from '../lib/version-store';
 import { unifiedDiff } from '../lib/unified-diff';
@@ -46,7 +47,7 @@ export function mountWorkspaceSwitcher(header: HTMLElement): void {
   header.prepend(select);
 
   const refresh = async () => {
-    select.innerHTML = '<option value="personal">Personal</option>';
+    select.innerHTML = `<option value="personal">${workspaceSwitcherLabel('personal', 'Personal')}</option>`;
     if (!isFirebaseConfigured() || !isAuthenticated()) {
       select.disabled = true;
       return;
@@ -57,7 +58,7 @@ export function mountWorkspaceSwitcher(header: HTMLElement): void {
     for (const ws of list) {
       const opt = document.createElement('option');
       opt.value = ws.id;
-      opt.textContent = `Shared: ${ws.name}`;
+      opt.textContent = workspaceSwitcherLabel(ws.kind, ws.name);
       select.appendChild(opt);
     }
     select.value = getState().activeWorkspaceId || 'personal';
@@ -99,7 +100,7 @@ export function mountWorkspaceSwitcher(header: HTMLElement): void {
 
 export function workspaceActions(): Array<[string, () => void]> {
   const actions: Array<[string, () => void]> = [
-    ['New shared workspace', createWs],
+    ['New organization…', createOrgWs],
     ['Members…', openMembers],
     ['History…', openHistory],
     ['Activity…', openActivity],
@@ -117,18 +118,18 @@ export function workspaceActions(): Array<[string, () => void]> {
   return actions;
 }
 
-async function createWs() {
+async function createOrgWs() {
   if (!isFirebaseConfigured()) {
-    window.alert('Shared workspaces require Firebase.');
+    window.alert('Organization workspaces require Firebase.');
     return;
   }
-  const name = window.prompt('Shared workspace name');
+  const name = window.prompt('Organization name');
   if (!name?.trim()) return;
   const s = getState();
-  const ws = await createSharedWorkspace(name.trim(), s.folders, s.tabs);
+  const ws = await createOrganizationWorkspace(name.trim(), s.folders, s.tabs);
   if (ws) {
-    await recordActivity({ workspaceId: ws.id, action: 'invite', meta: { kind: 'created' } });
-    window.alert('Shared workspace created.');
+    await recordActivity({ workspaceId: ws.id, action: 'invite', meta: { kind: 'organization' } });
+    window.alert('Organization workspace created.');
   }
 }
 
