@@ -13,6 +13,7 @@ import {
 } from 'firebase/firestore';
 import { getApp } from 'firebase/app';
 import { isFirebaseConfigured } from './firebase-config';
+import { buildCollabDocUrl, isCollabGatewayConfigured } from './collab-client';
 import type { CrdtUpdate } from '../types';
 
 // ─── Checksum ───
@@ -80,11 +81,107 @@ function getDb() {
   try { return getFirestore(getApp()); } catch { return null; }
 }
 
+/** Prefer Cloud Run collab gateway when VITE_COLLAB_WS_URL is set. */
+async function initGatewayCollaborativeDoc(
+  docId: string,
+  initialContent: string,
+  onContentChange: (content: string) => void,
+): Promise<CollaborativeSession | null> {
+  const wsUrl = await buildCollabDocUrl(docId);
+  if (!wsUrl) return null;
+
+  const ydoc = new Y.Doc();
+  const ytext = ydoc.getText('content');
+  let isApplyingRemote = false;
+  let socket: WebSocket | null = null;
+
+  if (initialContent) {
+    ydoc.transact(() => {
+      ytext.insert(0, initialContent);
+    }, 'init');
+  }
+  onContentChange(ytext.toString());
+
+  try {
+    socket = new WebSocket(wsUrl);
+  } catch {
+    ydoc.destroy();
+    return null;
+  }
+  socket.binaryType = 'arraybuffer';
+
+  const handleLocalUpdate = (update: Uint8Array, origin: unknown) => {
+    if (origin === 'remote' || origin === 'init' || isApplyingRemote) return;
+    if (socket?.readyState === WebSocket.OPEN) {
+      socket.send(update);
+    }
+  };
+  ydoc.on('update', handleLocalUpdate);
+
+  socket.addEventListener('open', () => {
+    // Push local state so peers catch up after join (incl. init content).
+    const state = Y.encodeStateAsUpdate(ydoc);
+    if (state.byteLength > 0 && socket?.readyState === WebSocket.OPEN) {
+      socket.send(state);
+    }
+  });
+
+  socket.addEventListener('message', (ev) => {
+    const data = ev.data;
+    const bytes =
+      data instanceof ArrayBuffer
+        ? new Uint8Array(data)
+        : data instanceof Blob
+          ? null
+          : null;
+    if (!bytes) {
+      if (data instanceof Blob) {
+        void data.arrayBuffer().then((buf) => {
+          isApplyingRemote = true;
+          Y.applyUpdate(ydoc, new Uint8Array(buf), 'remote');
+          isApplyingRemote = false;
+          onContentChange(ytext.toString());
+        });
+      }
+      return;
+    }
+    isApplyingRemote = true;
+    Y.applyUpdate(ydoc, bytes, 'remote');
+    isApplyingRemote = false;
+    onContentChange(ytext.toString());
+  });
+
+  return {
+    docId,
+    getContent: () => ytext.toString(),
+    applyRemoteContent: (content: string) => {
+      isApplyingRemote = true;
+      ydoc.transact(() => {
+        ytext.delete(0, ytext.length);
+        if (content) ytext.insert(0, content);
+      }, 'remote');
+      isApplyingRemote = false;
+      onContentChange(ytext.toString());
+    },
+    destroy: () => {
+      ydoc.off('update', handleLocalUpdate);
+      socket?.close();
+      socket = null;
+      ydoc.destroy();
+    },
+  };
+}
+
 export async function initCollaborativeDoc(
   docId: string,
   initialContent: string,
   onContentChange: (content: string) => void,
 ): Promise<CollaborativeSession> {
+  if (isCollabGatewayConfigured()) {
+    const gateway = await initGatewayCollaborativeDoc(docId, initialContent, onContentChange);
+    if (gateway) return gateway;
+  }
+
   const ydoc = new Y.Doc();
   const ytext = ydoc.getText('content');
   let unsubscribeRemote: Unsubscribe | null = null;

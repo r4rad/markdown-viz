@@ -20,6 +20,8 @@ interface ImportMetaEnv {
   readonly VITE_FEEDBACK_EMAIL: string;
   /** Cloud Run API base URL for server invites (e.g. http://localhost:8080). */
   readonly VITE_API_BASE_URL: string;
+  /** Yjs collab WebSocket base URL (e.g. ws://localhost:8081). */
+  readonly VITE_COLLAB_WS_URL: string;
 }
 
 interface ImportMeta {
