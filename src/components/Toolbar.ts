@@ -6,7 +6,35 @@ import { openSettingsMenu } from './SettingsMenu';
 import { isSharingEnabled } from '../lib/share';
 import { setPreviewEditable, isPreviewEditable } from './Preview';
 import { openQuickNote, openResearchCapture, openTemplatePicker } from './TemplateUI';
+import type { PresencePeer } from '../types';
 
+function escapeAttr(s: string): string {
+  return s.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;');
+}
+
+function renderPresenceBar(toolbar: HTMLElement, peers: PresencePeer[]): void {
+  const bar = toolbar.querySelector('#presence-bar') as HTMLElement | null;
+  if (!bar) return;
+  bar.innerHTML = '';
+  if (!peers.length) {
+    bar.style.display = 'none';
+    return;
+  }
+  bar.style.display = '';
+  for (const peer of peers) {
+    const chip = document.createElement('span');
+    chip.className = 'presence-avatar';
+    chip.style.setProperty('--presence-color', peer.color);
+    chip.title = `${peer.displayName} is here`;
+    if (peer.photoURL) {
+      chip.innerHTML = `<img src="${escapeAttr(peer.photoURL)}" alt="" />`;
+    } else {
+      const initial = peer.displayName.charAt(0).toUpperCase() || '?';
+      chip.textContent = initial;
+    }
+    bar.appendChild(chip);
+  }
+}
 export function createToolbar(): HTMLElement {
   const el = document.createElement('div');
   el.className = 'toolbar';
@@ -171,6 +199,8 @@ export function createToolbar(): HTMLElement {
 
     <div class="toolbar-group" id="auth-area"></div>
 
+    <div class="toolbar-group presence-bar" id="presence-bar" style="display:none" aria-label="Who is here"></div>
+
     <div class="toolbar-group" id="collab-indicator" style="display:none">
       ${icon('users')}<span class="collab-badge" id="collab-badge" title="Collaboration active"></span>
     </div>
@@ -205,6 +235,10 @@ export function createToolbar(): HTMLElement {
   on('collab-changed', (active: unknown) => {
     const indicator = el.querySelector('#collab-indicator') as HTMLElement | null;
     if (indicator) indicator.style.display = active ? '' : 'none';
+  });
+
+  on('presence-changed', (peers: unknown) => {
+    renderPresenceBar(el, peers as PresencePeer[]);
   });
 
   const syncTemplateBtns = () => {

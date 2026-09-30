@@ -195,6 +195,28 @@ export interface UserProfile {
   provider: 'github' | 'google';
 }
 
+// ─── RTDB presence ───
+export interface PresenceRange {
+  anchor: number;
+  head: number;
+}
+
+export interface PresenceUserInput {
+  uid: string;
+  displayName: string;
+  photoURL?: string | null;
+}
+
+export interface PresencePeer {
+  uid: string;
+  displayName: string;
+  color: string;
+  photoURL: string | null;
+  cursor: PresenceRange | null;
+  selection: PresenceRange | null;
+  updatedAt: number;
+}
+
 // ─── Feedback ───
 export interface FeedbackData {
   name: string;

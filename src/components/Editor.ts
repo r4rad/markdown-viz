@@ -11,7 +11,9 @@ import { tags } from '@lezer/highlight';
 import { canEditActiveWorkspace, getActiveTab, updateTabContent, updateTabCursor, getState } from '../lib/state';
 import { on, emit } from '../lib/events';
 import { DIAGRAM_TYPES, DIAGRAM_LABELS, getDrawTemplate } from '../lib/draw-command';
-import type { FileTab } from '../types';
+import { publishLocalCursor } from '../lib/presence';
+import { remotePresenceExtension, setRemotePresence } from '../lib/remote-cursors';
+import type { FileTab, PresencePeer } from '../types';
 
 let view: EditorView | null = null;
 let editorContainer: HTMLElement | null = null;
@@ -194,6 +196,7 @@ function getExtensions(): Extension[] {
     highlightSelectionMatches(),
     markdown({ base: markdownLanguage, codeLanguages: languages }),
     editableExtension(),
+    remotePresenceExtension(),
     keymap.of([
       ...closeBracketsKeymap,
       ...defaultKeymap,
@@ -223,6 +226,8 @@ function getExtensions(): Extension[] {
           updateTabCursor(tab.id, pos, scrollTop);
           const line = update.state.doc.lineAt(pos);
           emit('cursor-changed', { line: line.number, col: pos - line.from + 1 });
+          const sel = update.state.selection.main;
+          publishLocalCursor(sel.anchor, sel.head);
         }
       }
     }),
@@ -301,6 +306,13 @@ export function createEditor(): HTMLElement {
     const sd = view.scrollDOM;
     sd.scrollTop = (ratio as number) * (sd.scrollHeight - sd.clientHeight);
     requestAnimationFrame(() => { ignoreEditorScroll = false; });
+  });
+
+  on('presence-changed', (peers: unknown) => {
+    if (!view) return;
+    view.dispatch({
+      effects: setRemotePresence.of(peers as PresencePeer[]),
+    });
   });
 
   return editorContainer;
