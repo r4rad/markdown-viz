@@ -1,14 +1,14 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import type { AddressInfo } from 'node:net';
-import type http from 'node:http';
-import { createServer } from '../src/app.js';
+import { createServer, type CollabServer } from '../src/app.js';
 
 describe('GET /healthz', () => {
-  let server: http.Server;
+  let server: CollabServer;
   let baseUrl: string;
 
   beforeAll(async () => {
     server = createServer();
+    await server.collabReady;
     await new Promise<void>((resolve) => {
       server.listen(0, '127.0.0.1', () => resolve());
     });
@@ -17,9 +17,7 @@ describe('GET /healthz', () => {
   });
 
   afterAll(async () => {
-    await new Promise<void>((resolve, reject) => {
-      server.close((err) => (err ? reject(err) : resolve()));
-    });
+    await server.collabClose();
   });
 
   it('returns ok without auth or secrets', async () => {
