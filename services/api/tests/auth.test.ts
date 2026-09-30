@@ -24,6 +24,12 @@ describe('Firebase Auth verify stub', () => {
     expect(result).toEqual({ ok: true, user: { uid: 'alice' } });
   });
 
+  it('parses stub tokens with email for invite accept', async () => {
+    process.env.FIREBASE_AUTH_MODE = 'stub';
+    const result = await verifyFirebaseIdToken('Bearer stub:bob:bob@example.com');
+    expect(result).toEqual({ ok: true, user: { uid: 'bob', email: 'bob@example.com' } });
+  });
+
   it('does not require GitHub secrets when mode is stub', async () => {
     process.env.FIREBASE_AUTH_MODE = 'stub';
     delete process.env.GOOGLE_APPLICATION_CREDENTIALS;

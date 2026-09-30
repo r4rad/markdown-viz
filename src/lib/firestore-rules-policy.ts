@@ -31,14 +31,25 @@ export function rulesCanTransferOwnershipFromClient(
 }
 
 /**
- * syncJobs, repoLinks, history (incl. compaction), conflicts:
+ * syncJobs, repoLinks, history (incl. compaction), conflicts, invites:
  * client writes denied; Admin SDK / Cloud Run only.
  */
 export function rulesClientCanWriteBackendManagedCollection(
-  collection: 'repoLinks' | 'syncJobs' | 'history' | 'conflicts',
+  collection: 'repoLinks' | 'syncJobs' | 'history' | 'conflicts' | 'invites',
 ): boolean {
   void collection;
   return false;
+}
+
+/** Non-owners cannot self-assign a role via members/{ownUid}. */
+export function rulesClientCanSelfEnrollMembership(
+  actorIsOwner: boolean,
+  targetUidIsSelf: boolean,
+  requestedRole: RulesRole,
+): boolean {
+  if (!actorIsOwner) return false;
+  if (targetUidIsSelf) return requestedRole === 'owner';
+  return true;
 }
 
 export function rulesClientCanWriteWorkspaceFile(role: RulesRole | null | undefined): boolean {

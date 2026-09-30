@@ -7,11 +7,8 @@ import {
   setDoc,
   getDoc,
   collection,
-  collectionGroup,
   getDocs,
   deleteDoc,
-  query,
-  where,
 } from 'firebase/firestore';
 import { getApp } from 'firebase/app';
 import { emit } from './events';
@@ -19,6 +16,11 @@ import {
   buildOrganizationCreatePayload,
   normalizeWorkspaceKind,
 } from './workspace-kinds';
+import {
+  acceptServerInvite,
+  createServerInvite,
+  listServerInvites,
+} from './server-invites';
 
 export {
   buildGuestWorkspaceStub,
@@ -153,27 +155,18 @@ export async function inviteMember(
   workspaceId: string,
   emailOrUid: string,
   role: Exclude<Role, 'owner'>,
-): Promise<{ pending?: boolean; uid?: string }> {
+): Promise<{ pending?: boolean; uid?: string; inviteId?: string; acceptPath?: string }> {
   const user = getCurrentUser();
-  const firestore = db();
-  if (!user || !firestore) throw new Error('Firebase required');
+  if (!user) throw new Error('Firebase required');
+
   const email = emailOrUid.includes('@') ? emailOrUid.trim().toLowerCase() : '';
-  const uid = email ? '' : emailOrUid.trim();
-  if (uid) {
-    await setDoc(doc(firestore, 'workspaces', workspaceId, 'members', uid), {
-      uid, email: null, role, addedAt: Date.now(),
-    });
-    const ws = await getDoc(doc(firestore, 'workspaces', workspaceId));
-    await setDoc(doc(firestore, 'users', uid, 'memberships', workspaceId), {
-      workspaceId, name: ws.data()?.name || '', role,
-    });
-    return { uid };
+  if (!email) {
+    throw new Error('Email invite required — membership grants run on the server');
   }
-  const inviteId = crypto.randomUUID();
-  await setDoc(doc(firestore, 'workspaces', workspaceId, 'invites', inviteId), {
-    email, role, createdAt: Date.now(),
-  });
-  return { pending: true };
+
+  // Cloud Run creates the pending invite; clients must not write invites/members for enrollment.
+  const created = await createServerInvite(workspaceId, email, role);
+  return { pending: true, inviteId: created.id, acceptPath: created.acceptPath };
 }
 
 export async function changeMemberRole(
@@ -213,36 +206,26 @@ export async function listMembers(workspaceId: string): Promise<WorkspaceMember[
 }
 
 export async function listInvites(workspaceId: string): Promise<WorkspaceInvite[]> {
-  const firestore = db();
-  if (!firestore) return [];
-  const snap = await getDocs(collection(firestore, 'workspaces', workspaceId, 'invites'));
-  return snap.docs.map(d => ({ id: d.id, ...d.data() } as WorkspaceInvite));
+  // Prefer Cloud Run (authoritative). Firestore invite docs are Admin-only writes.
+  try {
+    return await listServerInvites(workspaceId);
+  } catch {
+    return [];
+  }
 }
 
+/**
+ * Legacy client self-enroll removed — acceptance is POST /v1/invites/:id/accept
+ * via /invite/:id. Kept as a no-op so switcher mount stays safe.
+ */
 export async function acceptPendingInvites(): Promise<void> {
-  const user = getCurrentUser();
-  const firestore = db();
-  if (!user?.email || !firestore) return;
-  const invites = await getDocs(query(
-    collectionGroup(firestore, 'invites'),
-    where('email', '==', user.email.toLowerCase()),
-  ));
-  for (const inv of invites.docs) {
-    const data = inv.data();
-    const wsId = inv.ref.parent.parent?.id;
-    if (!wsId) continue;
-    const ws = await getDoc(doc(firestore, 'workspaces', wsId));
-    await setDoc(doc(firestore, 'workspaces', wsId, 'members', user.uid), {
-      uid: user.uid,
-      email: user.email,
-      role: data.role,
-      addedAt: Date.now(),
-    });
-    await setDoc(doc(firestore, 'users', user.uid, 'memberships', wsId), {
-      workspaceId: wsId, name: ws.data()?.name || '', role: data.role,
-    });
-    await deleteDoc(inv.ref);
-  }
+  return;
+}
+
+/** Accept a single invite by id through Cloud Run (email must match ID token). */
+export async function acceptInviteById(inviteId: string): Promise<{ workspaceId: string; role: Exclude<Role, 'owner'> }> {
+  const result = await acceptServerInvite(inviteId);
+  return { workspaceId: result.workspaceId, role: result.role };
 }
 
 export async function syncSharedFile(workspaceId: string, tab: FileTab): Promise<void> {

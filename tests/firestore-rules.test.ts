@@ -4,6 +4,7 @@ import {
   rulesCanEditBody,
   rulesCanMutateMembership,
   rulesCanTransferOwnershipFromClient,
+  rulesClientCanSelfEnrollMembership,
   rulesClientCanWriteBackendManagedCollection,
   rulesClientCanWriteWorkspaceFile,
 } from '../src/lib/firestore-rules-policy';
@@ -63,10 +64,17 @@ describe('firestore rules ACL matrix (emulator policy)', () => {
     expect(rulesCanTransferOwnershipFromClient(true, false)).toBe(true);
   });
 
-  it('clients cannot write syncJobs, repoLinks, history, or conflicts', () => {
-    for (const col of ['repoLinks', 'syncJobs', 'history', 'conflicts'] as const) {
+  it('clients cannot write syncJobs, repoLinks, history, conflicts, or invites', () => {
+    for (const col of ['repoLinks', 'syncJobs', 'history', 'conflicts', 'invites'] as const) {
       expect(rulesClientCanWriteBackendManagedCollection(col)).toBe(false);
     }
+  });
+
+  it('clients cannot self-assign a non-owner role in Firestore', () => {
+    expect(rulesClientCanSelfEnrollMembership(false, true, 'editor')).toBe(false);
+    expect(rulesClientCanSelfEnrollMembership(false, true, 'viewer')).toBe(false);
+    expect(rulesClientCanSelfEnrollMembership(true, true, 'editor')).toBe(false);
+    expect(rulesClientCanSelfEnrollMembership(true, true, 'owner')).toBe(true);
   });
 
   it('role matrix covers viewer/commentator/editor/owner for body vs membership', () => {

@@ -1,4 +1,7 @@
 import { mountLandingPage } from './LandingPage';
+import { isAuthenticated } from '../lib/auth';
+import { acceptInviteById } from '../lib/shared-workspace';
+import { isApiConfigured } from '../lib/api-client';
 
 function entryRoot(): HTMLElement {
   const app = document.getElementById('app');
@@ -22,7 +25,7 @@ export function mountLandingEntry(): void {
   mountLandingPage(app);
 }
 
-/** Invite route shell. Server-validated acceptance is a later task. */
+/** Invite route: server-validated accept via Cloud Run POST /v1/invites/:id/accept. */
 export function mountInviteEntry(inviteId: string): void {
   const app = entryRoot();
   const main = document.createElement('main');
@@ -36,8 +39,39 @@ export function mountInviteEntry(inviteId: string): void {
   const text = document.createElement('p');
   const code = document.createElement('code');
   code.textContent = inviteId;
-  text.append('Invite ', code, ' is open on this page.');
+  text.append('Invite ', code);
 
-  main.append(heading, text, linkToApp('Continue to editor'));
+  const status = document.createElement('p');
+  status.dataset.inviteStatus = '1';
+
+  const actions = document.createElement('p');
+  const acceptBtn = document.createElement('button');
+  acceptBtn.type = 'button';
+  acceptBtn.textContent = 'Accept invite';
+  acceptBtn.disabled = !isApiConfigured() || !isAuthenticated();
+
+  if (!isApiConfigured()) {
+    status.textContent = 'Server invites are not configured (VITE_API_BASE_URL).';
+  } else if (!isAuthenticated()) {
+    status.textContent = 'Sign in with the invited email, then accept.';
+  } else {
+    status.textContent = 'Accept to join this workspace. Your signed-in email must match the invite.';
+  }
+
+  acceptBtn.addEventListener('click', async () => {
+    acceptBtn.disabled = true;
+    status.textContent = 'Accepting…';
+    try {
+      const result = await acceptInviteById(inviteId);
+      status.textContent = `Joined workspace ${result.workspaceId} as ${result.role}.`;
+      actions.replaceChildren(linkToApp('Continue to editor'));
+    } catch (err) {
+      status.textContent = err instanceof Error ? err.message : 'Accept failed';
+      acceptBtn.disabled = false;
+    }
+  });
+
+  actions.append(acceptBtn, document.createTextNode(' '), linkToApp('Open editor'));
+  main.append(heading, text, status, actions);
   app.append(main);
 }

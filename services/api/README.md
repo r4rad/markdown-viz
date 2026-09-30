@@ -1,6 +1,6 @@
 # Cloud Run API (`services/api`)
 
-Trusted backend for invites, GitHub App, webhooks, and sync APIs. This scaffold ships `/healthz` and a Firebase Auth verify **stub** only.
+Trusted backend for invites, GitHub App, webhooks, and sync APIs.
 
 ## Local run
 
@@ -38,11 +38,30 @@ Protected routes under `/v1/*` expect `Authorization: Bearer <token>`.
 | `FIREBASE_PROJECT_ID` | Placeholder for production project id |
 | `GOOGLE_APPLICATION_CREDENTIALS` | Runtime path to service account — **never commit** |
 
+Stub tokens:
+
+- `stub:alice` → uid `alice`
+- `stub:bob:bob@example.com` → uid + email (needed for invite accept)
+
 Example stub call:
 
 ```bash
 curl -s -H "Authorization: Bearer stub:alice" http://localhost:8080/v1/ping
 ```
+
+### Invites
+
+| Method | Path | Authz |
+|--------|------|-------|
+| POST | `/v1/invites` | workspace owner |
+| POST | `/v1/invites/:id/accept` | invitee (email match) |
+| GET | `/v1/workspaces/:workspaceId/invites` | workspace owner |
+
+Create body: `{ "workspaceId", "email", "role": "editor"|"commentator"|"viewer" }`.
+
+Email mismatch on accept returns `403` and leaves the invite `pending`.
+
+Persistence is an in-memory store locally/CI; production swaps in Firestore Admin.
 
 ## Tests
 

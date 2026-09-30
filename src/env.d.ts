@@ -18,6 +18,8 @@ interface ImportMetaEnv {
   readonly VITE_EMAILJS_TEMPLATE_ID: string;
   readonly VITE_EMAILJS_PUBLIC_KEY: string;
   readonly VITE_FEEDBACK_EMAIL: string;
+  /** Cloud Run API base URL for server invites (e.g. http://localhost:8080). */
+  readonly VITE_API_BASE_URL: string;
 }
 
 interface ImportMeta {

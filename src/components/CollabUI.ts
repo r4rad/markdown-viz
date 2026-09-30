@@ -11,11 +11,13 @@ import {
   removeMember,
   deleteSharedWorkspace,
   listMembers,
+  listInvites,
   acceptPendingInvites,
   setDocCollaborators,
   syncSharedFile,
   workspaceSwitcherLabel,
 } from '../lib/shared-workspace';
+import { inviteAcceptUrl } from '../lib/server-invites';
 import { listVersions, recordVersion } from '../lib/version-store';
 import { unifiedDiff } from '../lib/unified-diff';
 import { restoreApplies } from '../lib/versions';
@@ -149,22 +151,82 @@ async function openMembers() {
   if (wsId === 'personal') { window.alert('Switch to a shared workspace first.'); return; }
   if (getState().currentRole !== 'owner') { window.alert('Only the owner can manage members.'); return; }
   const members = await listMembers(wsId);
+  const invites = await listInvites(wsId);
   const overlay = modal(`
     <h3>Members</h3>
     <div id="member-list"></div>
-    <p><input id="inv-email" placeholder="email or uid" />
+    <h4>Pending invites</h4>
+    <div id="invite-list"></div>
+    <p><input id="inv-email" placeholder="email" />
     <select id="inv-role"><option value="editor">editor</option><option value="commentator">commentator</option><option value="viewer">viewer</option></select>
     <button id="inv-btn">Invite</button></p>
+    <p id="inv-link-row" hidden><input id="inv-link" readonly style="width:70%" />
+    <button id="inv-copy">Copy invite link</button></p>
     <p><button data-close="1">Close</button>
     <button id="del-ws">Delete workspace</button></p>`);
   const list = overlay.querySelector('#member-list')!;
   list.textContent = members.map(m => `${m.email || m.uid} (${m.role})`).join('\n');
+
+  const inviteList = overlay.querySelector('#invite-list')!;
+  const renderInvites = (rows: typeof invites) => {
+    inviteList.replaceChildren();
+    if (!rows.length) {
+      inviteList.textContent = 'None';
+      return;
+    }
+    for (const inv of rows) {
+      const row = document.createElement('div');
+      const link = inviteAcceptUrl(inv.id);
+      row.textContent = `${inv.email} (${inv.role}) `;
+      const copyBtn = document.createElement('button');
+      copyBtn.type = 'button';
+      copyBtn.textContent = 'Copy link';
+      copyBtn.addEventListener('click', async () => {
+        try {
+          await navigator.clipboard.writeText(link);
+        } catch {
+          window.prompt('Copy invite link', link);
+        }
+      });
+      row.appendChild(copyBtn);
+      inviteList.appendChild(row);
+    }
+  };
+  renderInvites(invites);
+
+  const linkRow = overlay.querySelector('#inv-link-row') as HTMLElement;
+  const linkInput = overlay.querySelector('#inv-link') as HTMLInputElement;
+
   overlay.querySelector('#inv-btn')!.addEventListener('click', async () => {
     const email = (overlay.querySelector('#inv-email') as HTMLInputElement).value;
     const role = (overlay.querySelector('#inv-role') as HTMLSelectElement).value as Exclude<Role, 'owner'>;
-    await inviteMember(wsId, email, role);
-    await recordActivity({ workspaceId: wsId, action: 'invite', meta: { email, role } });
-    overlay.remove();
+    try {
+      const result = await inviteMember(wsId, email, role);
+      await recordActivity({ workspaceId: wsId, action: 'invite', meta: { email, role } });
+      if (result.inviteId) {
+        const url = inviteAcceptUrl(result.inviteId);
+        linkInput.value = url;
+        linkRow.hidden = false;
+        const refreshed = await listInvites(wsId);
+        renderInvites(refreshed.length ? refreshed : [{
+          id: result.inviteId,
+          email: email.trim().toLowerCase(),
+          role,
+          createdAt: Date.now(),
+        }]);
+      }
+    } catch (err) {
+      window.alert(err instanceof Error ? err.message : 'Invite failed');
+    }
+  });
+  overlay.querySelector('#inv-copy')!.addEventListener('click', async () => {
+    const url = linkInput.value;
+    if (!url) return;
+    try {
+      await navigator.clipboard.writeText(url);
+    } catch {
+      window.prompt('Copy invite link', url);
+    }
   });
   overlay.querySelector('#del-ws')!.addEventListener('click', async () => {
     if (!window.confirm('Delete this shared workspace? Personal documents are not deleted.')) return;
