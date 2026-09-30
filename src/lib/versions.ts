@@ -1,3 +1,4 @@
+import { canWriteWorkspace } from './workspace-acl';
 import type { DocVersion, Role, VersionSource } from '../types';
 
 export const VERSION_CAP = 50;
@@ -71,5 +72,5 @@ export function capVersions(versions: DocVersion[]): DocVersion[] {
 }
 
 export function restoreApplies(role: Role | null): boolean {
-  return role === 'owner' || role === 'editor';
+  return canWriteWorkspace(role);
 }

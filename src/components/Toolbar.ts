@@ -320,6 +320,7 @@ function setupToolbarEvents(toolbar: HTMLElement): void {
         break;
       }
       case 'toggle-preview-edit':
+        if (!canEditActiveWorkspace()) break;
         setPreviewEditable(!isPreviewEditable());
         break;
       case 'copy-editor':

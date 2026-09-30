@@ -1,6 +1,6 @@
 import { marked } from 'marked';
 import DOMPurify from 'dompurify';
-import { getActiveTab, getState, setPreviewScroll, updateTabContent } from '../lib/state';
+import { canEditActiveWorkspace, getActiveTab, getState, setPreviewScroll, updateTabContent } from '../lib/state';
 import { on, emit } from '../lib/events';
 import { htmlToMarkdown } from '../lib/html-to-markdown';
 import { isValidDiagramType, type DiagramType } from '../lib/draw-command';
@@ -435,16 +435,16 @@ function protectNonEditableElements(): void {
 }
 
 export function setPreviewEditable(editable: boolean): void {
-  previewEditable = editable;
+  previewEditable = editable && canEditActiveWorkspace();
   if (contentEl) {
-    contentEl.setAttribute('contenteditable', editable ? 'true' : 'false');
-    contentEl.classList.toggle('preview-editable', editable);
-    if (editable) protectNonEditableElements();
+    contentEl.setAttribute('contenteditable', previewEditable ? 'true' : 'false');
+    contentEl.classList.toggle('preview-editable', previewEditable);
+    if (previewEditable) protectNonEditableElements();
   }
-  if (drawFabEl) drawFabEl.style.display = editable ? 'flex' : 'none';
-  if (previewEl) previewEl.classList.toggle('preview-edit-mode', editable);
-  if (!editable) cursorInsertRatio = -1;
-  emit('preview-mode-changed', editable);
+  if (drawFabEl) drawFabEl.style.display = previewEditable ? 'flex' : 'none';
+  if (previewEl) previewEl.classList.toggle('preview-edit-mode', previewEditable);
+  if (!previewEditable) cursorInsertRatio = -1;
+  emit('preview-mode-changed', previewEditable);
 }
 
 // ─── Cursor-aware diagram insertion helpers ───────────────────────────────────

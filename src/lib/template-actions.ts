@@ -58,7 +58,7 @@ export function createFromTemplate(input: {
 }
 
 export function duplicateTemplateToWorkspace(docType: DocType): { ok: true; fileId: string } | { ok: false; error: string } {
-  if (!canEditActiveWorkspace()) return { ok: false, error: 'Viewers cannot duplicate templates.' };
+  if (!canEditActiveWorkspace()) return { ok: false, error: 'Viewers and commentators cannot duplicate templates.' };
   const { folders, ids } = ensureDefaultFolders(getState().folders);
   replaceFolders(folders);
   const builtins = listTemplates([], ids.templates);

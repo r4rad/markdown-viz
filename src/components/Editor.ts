@@ -1,5 +1,5 @@
 import { EditorView, keymap, lineNumbers, highlightActiveLineGutter, highlightSpecialChars, drawSelection, dropCursor, rectangularSelection, highlightActiveLine } from '@codemirror/view';
-import { EditorState, type Extension } from '@codemirror/state';
+import { Compartment, EditorState, type Extension } from '@codemirror/state';
 import { defaultKeymap, history, historyKeymap, indentWithTab } from '@codemirror/commands';
 import { markdown, markdownLanguage } from '@codemirror/lang-markdown';
 import { languages } from '@codemirror/language-data';
@@ -8,7 +8,7 @@ import { closeBrackets, closeBracketsKeymap, autocompletion, completionKeymap, t
 import { searchKeymap, highlightSelectionMatches } from '@codemirror/search';
 import { lintKeymap } from '@codemirror/lint';
 import { tags } from '@lezer/highlight';
-import { getActiveTab, updateTabContent, updateTabCursor, getState } from '../lib/state';
+import { canEditActiveWorkspace, getActiveTab, updateTabContent, updateTabCursor, getState } from '../lib/state';
 import { on, emit } from '../lib/events';
 import { DIAGRAM_TYPES, DIAGRAM_LABELS, getDrawTemplate } from '../lib/draw-command';
 import type { FileTab } from '../types';
@@ -17,6 +17,19 @@ let view: EditorView | null = null;
 let editorContainer: HTMLElement | null = null;
 let ignoreNextUpdate = false;
 let ignoreEditorScroll = false;
+/** Keeps the editor non-editable for commentator/viewer without blocking programmatic loads. */
+const editableCompartment = new Compartment();
+
+function editableExtension(): Extension {
+  return editableCompartment.of(EditorView.editable.of(canEditActiveWorkspace()));
+}
+
+function syncEditorEditable(): void {
+  if (!view) return;
+  view.dispatch({
+    effects: editableCompartment.reconfigure(EditorView.editable.of(canEditActiveWorkspace())),
+  });
+}
 
 // ─── /draw slash-command completion ───────────────────────────────────────────
 
@@ -180,6 +193,7 @@ function getExtensions(): Extension[] {
     highlightActiveLine(),
     highlightSelectionMatches(),
     markdown({ base: markdownLanguage, codeLanguages: languages }),
+    editableExtension(),
     keymap.of([
       ...closeBracketsKeymap,
       ...defaultKeymap,
@@ -243,7 +257,9 @@ export function createEditor(): HTMLElement {
   on('state-restored', () => {
     const tab = getActiveTab();
     if (tab) loadTab(tab);
+    syncEditorEditable();
   });
+  on('state-changed', () => syncEditorEditable());
 
   on('toolbar-action', (action: unknown) => {
     handleToolbarAction(action as string);
@@ -307,7 +323,7 @@ function loadTab(tab: FileTab | null): void {
 }
 
 function handleToolbarAction(action: string): void {
-  if (!view) return;
+  if (!view || !canEditActiveWorkspace()) return;
   const { state } = view;
   const range = state.selection.main;
   const selected = state.sliceDoc(range.from, range.to);
