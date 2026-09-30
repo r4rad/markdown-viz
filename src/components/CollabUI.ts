@@ -153,7 +153,7 @@ async function openMembers() {
     <h3>Members</h3>
     <div id="member-list"></div>
     <p><input id="inv-email" placeholder="email or uid" />
-    <select id="inv-role"><option value="editor">editor</option><option value="viewer">viewer</option></select>
+    <select id="inv-role"><option value="editor">editor</option><option value="commentator">commentator</option><option value="viewer">viewer</option></select>
     <button id="inv-btn">Invite</button></p>
     <p><button data-close="1">Close</button>
     <button id="del-ws">Delete workspace</button></p>`);
@@ -161,7 +161,7 @@ async function openMembers() {
   list.textContent = members.map(m => `${m.email || m.uid} (${m.role})`).join('\n');
   overlay.querySelector('#inv-btn')!.addEventListener('click', async () => {
     const email = (overlay.querySelector('#inv-email') as HTMLInputElement).value;
-    const role = (overlay.querySelector('#inv-role') as HTMLSelectElement).value as 'editor' | 'viewer';
+    const role = (overlay.querySelector('#inv-role') as HTMLSelectElement).value as Exclude<Role, 'owner'>;
     await inviteMember(wsId, email, role);
     await recordActivity({ workspaceId: wsId, action: 'invite', meta: { email, role } });
     overlay.remove();
@@ -175,10 +175,15 @@ async function openMembers() {
   overlay.querySelector('[data-close]')!.addEventListener('click', () => overlay.remove());
   for (const m of members.filter(x => x.role !== 'owner')) {
     const row = document.createElement('div');
-    row.innerHTML = `${m.uid} <button data-role="editor">editor</button> <button data-role="viewer">viewer</button> <button data-rm="1">remove</button>`;
+    row.innerHTML = `${m.uid} <button data-role="editor">editor</button> <button data-role="commentator">commentator</button> <button data-role="viewer">viewer</button> <button data-rm="1">remove</button>`;
     row.querySelector('[data-role="editor"]')!.addEventListener('click', async () => {
       await changeMemberRole(wsId, m.uid, 'editor');
       await recordActivity({ workspaceId: wsId, action: 'role_change', meta: { uid: m.uid, role: 'editor' } });
+    });
+    row.querySelector('[data-role="commentator"]')!.addEventListener('click', async () => {
+      await changeMemberRole(wsId, m.uid, 'commentator');
+      await recordActivity({ workspaceId: wsId, action: 'role_change', meta: { uid: m.uid, role: 'commentator' } });
+      if (getCurrentUser()?.uid === m.uid) stopCollaboration(getActiveTab()?.id || '');
     });
     row.querySelector('[data-role="viewer"]')!.addEventListener('click', async () => {
       await changeMemberRole(wsId, m.uid, 'viewer');
@@ -305,7 +310,7 @@ async function openWiki() {
   const wsId = getState().activeWorkspaceId;
   const tab = getActiveTab();
   if (wsId === 'personal' || !tab) { window.alert('Map wiki sync from a shared workspace file.'); return; }
-  if (!canSyncWiki(getState().currentRole)) { window.alert('Viewers cannot sync wiki.'); return; }
+  if (!canSyncWiki(getState().currentRole)) { window.alert('Viewers and commentators cannot sync wiki.'); return; }
   const overlay = modal(`
     <h3>Wiki mapping</h3>
     <p>Tokens stay in Settings (session), never Firestore.</p>

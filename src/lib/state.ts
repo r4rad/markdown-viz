@@ -112,7 +112,7 @@ export function canEditActiveWorkspace(): boolean {
 
 function rejectViewerWrite(): boolean {
   if (canEditActiveWorkspace()) return false;
-  emit('workspace-error', 'Viewers cannot edit this shared workspace.');
+  emit('workspace-error', 'Viewers and commentators cannot edit this shared workspace.');
   return true;
 }
 
@@ -273,6 +273,7 @@ export function updateTabOrigin(id: string, origin: FileOrigin): void {
 }
 
 export function setTabFolder(tabId: string, folderId: FolderId | null): void {
+  if (rejectViewerWrite()) return;
   state.tabs = setTabFolderRecord(state.tabs, tabId, folderId);
   emit('state-changed', state);
 }
@@ -292,6 +293,7 @@ export function renameFolder(id: FolderId, name: string): void {
 }
 
 export function moveFolder(id: FolderId, newParentId: FolderId | null): void {
+  if (rejectViewerWrite()) return;
   state.folders = moveFolderRecord(state.folders, id, newParentId);
   emit('state-changed', state);
 }
@@ -314,6 +316,7 @@ export function deleteFolder(id: FolderId, mode: DeleteFolderMode): string[] {
 }
 
 export function setFolderRepoLink(id: FolderId, repoLink: GitHubRepoLink | null): void {
+  if (rejectViewerWrite()) return;
   state.folders = setFolderRepoLinkRecord(state.folders, id, repoLink);
   emit('state-changed', state);
 }

@@ -1,4 +1,4 @@
-import type { FileTab, SharedWorkspace, WorkspaceFolder, WorkspaceInvite, WorkspaceMember } from '../types';
+import type { FileTab, Role, SharedWorkspace, WorkspaceFolder, WorkspaceInvite, WorkspaceMember } from '../types';
 import { isFirebaseConfigured } from './firebase-config';
 import { getCurrentUser } from './auth';
 import {
@@ -149,7 +149,11 @@ export async function loadSharedTree(workspaceId: string): Promise<{ folders: Wo
   return { folders, tabs, role: member.data().role };
 }
 
-export async function inviteMember(workspaceId: string, emailOrUid: string, role: 'editor' | 'viewer'): Promise<{ pending?: boolean; uid?: string }> {
+export async function inviteMember(
+  workspaceId: string,
+  emailOrUid: string,
+  role: Exclude<Role, 'owner'>,
+): Promise<{ pending?: boolean; uid?: string }> {
   const user = getCurrentUser();
   const firestore = db();
   if (!user || !firestore) throw new Error('Firebase required');
@@ -172,7 +176,11 @@ export async function inviteMember(workspaceId: string, emailOrUid: string, role
   return { pending: true };
 }
 
-export async function changeMemberRole(workspaceId: string, uid: string, role: 'editor' | 'viewer' | 'owner'): Promise<void> {
+export async function changeMemberRole(
+  workspaceId: string,
+  uid: string,
+  role: Role,
+): Promise<void> {
   const firestore = db();
   if (!firestore) return;
   await setDoc(doc(firestore, 'workspaces', workspaceId, 'members', uid), { role }, { merge: true });
