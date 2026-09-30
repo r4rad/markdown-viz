@@ -38,6 +38,7 @@ import { getGroqApiKey, generateSummaryWithGroq } from '../lib/groq-summarize';
 import { showChangelogIfNew } from './ChangelogModal';
 import type { AudioControls } from '../lib/tts';
 import { createWorkspaceTree, hydrateRepoIndexes } from './WorkspaceTree';
+import { mountPresenceController } from '../lib/presence';
 
 
 export async function initApp(): Promise<void> {
@@ -80,6 +81,7 @@ export async function initApp(): Promise<void> {
   setupKeyboardShortcuts();
   initFirebase();
   initAuthUI();
+  mountPresenceController();
   setupAutoSync();
 
   // Check if we arrived via a shared document URL

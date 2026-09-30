@@ -89,6 +89,8 @@ export function mountWorkspaceSwitcher(header: HTMLElement): void {
     });
     const members = await listMembers(id);
     const tab = getActiveTab();
+    // Presence (RTDB) is mounted globally for all roles, including viewers/commentators.
+    // Text CRDT writes remain editor/owner only.
     if (tab && canEditActiveWorkspace()) {
       const owner = members.find(m => m.role === 'owner');
       await setDocCollaborators(tab.id, members.map(m => m.uid), owner?.uid || '');

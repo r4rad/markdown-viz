@@ -7,6 +7,8 @@ interface ImportMetaEnv {
   readonly VITE_FIREBASE_STORAGE_BUCKET: string;
   readonly VITE_FIREBASE_MESSAGING_SENDER_ID: string;
   readonly VITE_FIREBASE_APP_ID: string;
+  /** Firebase Realtime Database URL for presence (defaults to PROJECT_ID-default-rtdb). */
+  readonly VITE_FIREBASE_DATABASE_URL: string;
   readonly VITE_MAX_SYNC_TABS: string;
   readonly VITE_AUTO_SYNC_INTERVAL_SECONDS: string;
   readonly VITE_ENABLE_SHARING: string;
