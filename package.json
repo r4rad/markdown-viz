@@ -8,11 +8,12 @@
     "dev": "vite",
     "build": "tsc && vite build",
     "preview": "vite preview",
-    "test": "vitest run && npm --prefix services/api test",
+    "test": "vitest run && npm --prefix services/api test && npm --prefix services/collab test",
     "test:spa": "vitest run",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
-    "test:api": "npm --prefix services/api test"
+    "test:api": "npm --prefix services/api test",
+    "test:collab": "npm --prefix services/collab test"
   },
   "devDependencies": {
     "@testing-library/dom": "^10.4.1",

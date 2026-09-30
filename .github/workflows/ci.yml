@@ -42,3 +42,20 @@ jobs:
       - run: npm ci
       - run: npm test
       - run: npm run build
+
+  collab:
+    name: Collab gateway build & test
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: services/collab
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+          cache-dependency-path: services/collab/package-lock.json
+      - run: npm ci
+      - run: npm test
+      - run: npm run build
