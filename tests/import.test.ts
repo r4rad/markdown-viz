@@ -1,10 +1,41 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
-
-// We test the import module's helper logic by importing and testing
-// the htmlToMarkdown conversion via the DOCX pipeline
-// and the file handling logic
+import { describe, it, expect } from 'vitest';
+import { filterMarkdownRelativePaths, isMarkdownImportPath } from '../src/lib/import';
+import { htmlToMarkdown } from '../src/lib/html-to-markdown';
 
 describe('Import Module', () => {
+  describe('markdown-only directory filter', () => {
+    it('accepts .md / .mdx / .markdown (case-insensitive)', () => {
+      expect(isMarkdownImportPath('readme.md')).toBe(true);
+      expect(isMarkdownImportPath('docs/Guide.MDX')).toBe(true);
+      expect(isMarkdownImportPath('notes/Hello.Markdown')).toBe(true);
+    });
+
+    it('rejects non-markdown paths', () => {
+      expect(isMarkdownImportPath('image.png')).toBe(false);
+      expect(isMarkdownImportPath('notes.txt')).toBe(false);
+      expect(isMarkdownImportPath('readme.md.bak')).toBe(false);
+      expect(isMarkdownImportPath('folder')).toBe(false);
+    });
+
+    it('filters a mixed directory listing to markdown only', () => {
+      const paths = [
+        'docs/intro.md',
+        'docs/logo.png',
+        'docs/guide/setup.mdx',
+        'docs/guide/data.json',
+        'docs/CHANGELOG.markdown',
+        'docs/notes.txt',
+        'docs/nested/deep/README.MD',
+      ];
+      expect(filterMarkdownRelativePaths(paths)).toEqual([
+        'docs/intro.md',
+        'docs/guide/setup.mdx',
+        'docs/CHANGELOG.markdown',
+        'docs/nested/deep/README.MD',
+      ]);
+    });
+  });
+
   describe('File extension handling', () => {
     it('should recognize markdown extensions', () => {
       const mdExtensions = ['md', 'markdown', 'mdx', 'txt', 'text'];
@@ -21,60 +52,7 @@ describe('Import Module', () => {
     });
   });
 
-  describe('HTML to Markdown conversion (via DOM)', () => {
-    // Test the DOM-based HTML-to-markdown conversion logic
-    function htmlToMarkdown(html: string): string {
-      const lines: string[] = [];
-      const parser = new DOMParser();
-      const doc = parser.parseFromString(html, 'text/html');
-
-      function walk(node: Node): string {
-        if (node.nodeType === Node.TEXT_NODE) return node.textContent || '';
-        if (node.nodeType !== Node.ELEMENT_NODE) return '';
-        const el = node as HTMLElement;
-        const tag = el.tagName.toLowerCase();
-        const children = () => Array.from(el.childNodes).map(walk).join('');
-
-        switch (tag) {
-          case 'h1': return `# ${children()}\n\n`;
-          case 'h2': return `## ${children()}\n\n`;
-          case 'h3': return `### ${children()}\n\n`;
-          case 'p': return `${children()}\n\n`;
-          case 'strong': case 'b': return `**${children()}**`;
-          case 'em': case 'i': return `*${children()}*`;
-          case 'code': return `\`${children()}\``;
-          case 'a': return `[${children()}](${el.getAttribute('href') || ''})`;
-          case 'img': return `![${el.getAttribute('alt') || ''}](${el.getAttribute('src') || ''})`;
-          case 'ul': return Array.from(el.children).map(li => `- ${walk(li).trim()}`).join('\n') + '\n\n';
-          case 'ol': return Array.from(el.children).map((li, i) => `${i + 1}. ${walk(li).trim()}`).join('\n') + '\n\n';
-          case 'li': return children();
-          case 'hr': return '\n---\n\n';
-          case 'br': return '\n';
-          case 'blockquote': return children().split('\n').map(l => `> ${l}`).join('\n') + '\n\n';
-          case 'pre': return `\n\`\`\`\n${el.textContent || ''}\n\`\`\`\n\n`;
-          case 'del': case 's': return `~~${children()}~~`;
-          case 'table': {
-            const rows = Array.from(el.querySelectorAll('tr'));
-            if (!rows.length) return '';
-            const tableLines: string[] = [];
-            rows.forEach((row, ri) => {
-              const cells = Array.from(row.querySelectorAll('th, td'))
-                .map(c => (c.textContent || '').trim().replace(/\|/g, '\\|'));
-              tableLines.push(`| ${cells.join(' | ')} |`);
-              if (ri === 0) tableLines.push(`| ${cells.map(() => '---').join(' | ')} |`);
-            });
-            return tableLines.join('\n') + '\n\n';
-          }
-          default: return children();
-        }
-      }
-
-      for (const child of Array.from(doc.body.childNodes)) {
-        lines.push(walk(child));
-      }
-      return lines.join('').replace(/\n{3,}/g, '\n\n').trim();
-    }
-
+  describe('HTML to Markdown conversion', () => {
     it('should convert headings', () => {
       expect(htmlToMarkdown('<h1>Title</h1>')).toContain('# Title');
       expect(htmlToMarkdown('<h2>Subtitle</h2>')).toContain('## Subtitle');

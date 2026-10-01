@@ -10,11 +10,16 @@ import {
 import type { AudioPlayerCallbacks } from './AudioPlayer';
 import { initDiagramModal } from './DiagramModal';
 import { initSettingsMenu, openSettingsMenu } from './SettingsMenu';
-import { getState, addTab, restoreState, toggleEditor, togglePreview, getActiveTab } from '../lib/state';
+import { getState, addTab, addFolder, restoreState, toggleEditor, togglePreview, getActiveTab } from '../lib/state';
 import { on, emit } from '../lib/events';
 import { loadState, debouncedSave } from '../lib/storage';
 import { applyTheme, getSavedTheme } from '../themes/themes';
-import { setupImport, openFilePicker } from '../lib/import';
+import {
+  setupImport,
+  openFilePicker,
+  openDirectoryImport,
+  type DirectoryImportPayload,
+} from '../lib/import';
 import { exportMarkdown, exportHTML, exportPDF, exportDOCX } from '../lib/export';
 import { beautifyMarkdown } from '../lib/beautifier';
 import { loadTemplateSettings } from '../lib/template-actions';
@@ -94,10 +99,15 @@ export async function initApp(): Promise<void> {
 
   // Wire up events
   on('import-file', () => openFilePicker());
+  on('import-directory', () => { void openDirectoryImport(); });
 
   on('file-imported', (data: unknown) => {
     const { name, content } = data as { name: string; content: string };
     addTab(name, content);
+  });
+
+  on('directory-imported', (data: unknown) => {
+    applyDirectoryImport(data as DirectoryImportPayload);
   });
 
   on('export', (format: unknown) => {
@@ -487,4 +497,42 @@ async function loadSharedDocFromURL(): Promise<void> {
   }
   // Stay on the editor shell. `/` is the landing route.
   window.history.replaceState(null, '', '/app');
+}
+
+/** Recreate nested folders and ingest markdown files from a one-shot directory import. */
+function applyDirectoryImport(payload: DirectoryImportPayload): void {
+  if (!payload?.rootName?.trim()) return;
+  if (!payload.files.length) {
+    window.alert('No markdown files (.md, .mdx, .markdown) found in that folder.');
+    return;
+  }
+
+  const root = addFolder(payload.rootName.trim(), null);
+  const folderIds = new Map<string, string>();
+  folderIds.set('', root.id);
+
+  for (const file of payload.files) {
+    const normalized = file.relativePath.replace(/\\/g, '/').replace(/^\/+/, '');
+    if (!normalized) continue;
+    const parts = normalized.split('/');
+    const fileName = parts.pop();
+    if (!fileName) continue;
+
+    let parentKey = '';
+    let parentId = root.id;
+    for (const segment of parts) {
+      if (!segment || segment === '.' || segment === '..') continue;
+      const key = parentKey ? `${parentKey}/${segment}` : segment;
+      let id = folderIds.get(key);
+      if (!id) {
+        const folder = addFolder(segment, parentId);
+        id = folder.id;
+        folderIds.set(key, id);
+      }
+      parentId = id;
+      parentKey = key;
+    }
+
+    addTab(fileName, file.content, { folderId: parentId });
+  }
 }

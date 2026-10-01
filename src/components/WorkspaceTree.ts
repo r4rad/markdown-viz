@@ -12,7 +12,7 @@ import {
   switchTab,
   updateTabOrigin,
 } from '../lib/state';
-import { on } from '../lib/events';
+import { on, emit } from '../lib/events';
 import { getGithubToken } from '../lib/github-token';
 import { getFileContent, listMarkdownFiles } from '../lib/github-api';
 import { loadRepoIndex, repoIndexKey, saveRepoIndex, type RepoIndexEntry } from '../lib/storage';
@@ -31,7 +31,7 @@ export function createWorkspaceTree(): HTMLElement {
 
   const header = document.createElement('div');
   header.className = 'workspace-tree-header';
-  header.innerHTML = `<span>Workspace</span><button class="workspace-icon-btn" data-act="new-root" title="New folder">+</button><button class="workspace-icon-btn" data-act="collab" title="Sharing">⋯</button>`;
+  header.innerHTML = `<span>Workspace</span><button class="workspace-icon-btn" data-act="new-root" title="New folder">+</button><button class="workspace-icon-btn" data-act="import-folder" title="Import folder">📁</button><button class="workspace-icon-btn" data-act="collab" title="Sharing">⋯</button>`;
   el.appendChild(header);
   mountWorkspaceSwitcher(header);
 
@@ -58,6 +58,10 @@ export function createWorkspaceTree(): HTMLElement {
       if (!canEditActiveWorkspace()) return;
       const name = window.prompt('Folder name');
       if (name?.trim()) addFolder(name.trim(), null);
+    }
+    if ((e.target as HTMLElement).closest('[data-act="import-folder"]')) {
+      if (!canEditActiveWorkspace()) return;
+      emit('import-directory');
     }
     if ((e.target as HTMLElement).closest('[data-act="collab"]')) {
       const acts = workspaceActions();
@@ -162,6 +166,10 @@ export function createWorkspaceTree(): HTMLElement {
       ['New folder', () => {
         const name = window.prompt('Folder name');
         if (name?.trim()) addFolder(name.trim(), folder.id);
+      }],
+      ['Import folder…', () => {
+        if (!canEditActiveWorkspace()) return;
+        emit('import-directory');
       }],
       ['Rename', () => {
         const name = window.prompt('Rename folder', folder.name);
