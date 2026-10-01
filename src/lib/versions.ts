@@ -1,7 +1,16 @@
 import { canWriteWorkspace } from './workspace-acl';
+import {
+  HISTORY_COMPACTION_EVENTS,
+  planHistoryBlobs,
+  type HistoryEvent,
+} from '@markdown-viz/domain';
 import type { DocVersion, Role, VersionSource } from '../types';
 
-export const VERSION_CAP = 50;
+/**
+ * Compaction interval (snapshot every N events) — not a delete cap.
+ * Kept as VERSION_CAP alias for older call sites / tests.
+ */
+export const VERSION_CAP = HISTORY_COMPACTION_EVENTS;
 export const LARGE_SNAPSHOT_BYTES = 800 * 1024;
 
 export function checksumUnchanged(previous: string | undefined, next: string): boolean {
@@ -43,6 +52,10 @@ export function buildVersion(input: {
   return { version, skipped: false, storagePathNeeded: store.storagePathNeeded };
 }
 
+/**
+ * Append a version without deleting prior history.
+ * Duplicate checksums (newest) are skipped.
+ */
 export function appendVersion(
   existing: DocVersion[],
   next: DocVersion,
@@ -51,24 +64,56 @@ export function appendVersion(
   if (checksumUnchanged(newest?.checksum, next.checksum)) {
     return { versions: existing, skipped: true, droppedIds: [] };
   }
-  return { versions: capVersions([...existing, next]), skipped: false, droppedIds: [] };
+  return { versions: [...existing, next], skipped: false, droppedIds: [] };
 }
 
-/** Keep at most 50; never drop the latest or the most recent restore point. */
+/**
+ * Unlimited retention — never drop prior history.
+ * (Formerly enforced a 50-version delete cap.)
+ */
 export function capVersions(versions: DocVersion[]): DocVersion[] {
-  if (versions.length <= VERSION_CAP) return versions;
-  const sorted = [...versions].sort((a, b) => a.createdAt - b.createdAt);
-  const latest = sorted[sorted.length - 1];
-  const restorePoints = sorted.filter(v => v.source === 'restore');
-  const recentRestore = restorePoints[restorePoints.length - 1];
-  const protectedIds = new Set<string>([latest.id]);
-  if (recentRestore) protectedIds.add(recentRestore.id);
+  return [...versions].sort((a, b) => a.createdAt - b.createdAt);
+}
 
-  const droppable = sorted.filter(v => !protectedIds.has(v.id));
-  const keepCount = VERSION_CAP - protectedIds.size;
-  const keptDroppable = droppable.slice(Math.max(0, droppable.length - keepCount));
-  const keptIds = new Set([...protectedIds, ...keptDroppable.map(v => v.id)]);
-  return sorted.filter(v => keptIds.has(v.id));
+/**
+ * Assign snapshot vs delta Storage paths from HistoryEvent compaction rules.
+ * Restore always forces a full snapshot path.
+ */
+export function assignHistoryStoragePaths(
+  existing: DocVersion[],
+  next: DocVersion,
+  contentBytes: number,
+): DocVersion {
+  const asEvents: HistoryEvent[] = existing.map(docVersionToHistoryEvent);
+  const blobs = planHistoryBlobs({
+    workspaceId: String(next.workspaceId),
+    documentId: next.fileId,
+    eventId: next.id,
+    existing: asEvents,
+    nextContentBytes: contentBytes,
+    forceSnapshot: next.source === 'restore',
+  });
+  return {
+    ...next,
+    storagePath: blobs.snapshotPath ?? blobs.deltaPath ?? next.storagePath,
+  };
+}
+
+export function docVersionToHistoryEvent(v: DocVersion): HistoryEvent {
+  const isSnap =
+    v.source === 'restore' ||
+    (typeof v.storagePath === 'string' && v.storagePath.includes('.snap.'));
+  return {
+    id: v.id,
+    documentId: v.fileId,
+    workspaceId: String(v.workspaceId),
+    authorId: v.authorId,
+    createdAt: v.createdAt,
+    source: v.source === 'mcp' ? 'mcp' : v.source === 'sync' ? 'sync' : v.source === 'restore' ? 'restore' : 'save',
+    checksum: v.checksum,
+    snapshotPath: isSnap ? v.storagePath : undefined,
+    deltaPath: !isSnap && v.storagePath ? v.storagePath : undefined,
+  };
 }
 
 export function restoreApplies(role: Role | null): boolean {

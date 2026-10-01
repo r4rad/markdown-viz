@@ -1,9 +1,9 @@
 import type { DocVersion, VersionSource } from '../types';
-import { appendVersion, buildVersion, capVersions } from './versions';
+import { appendVersion, assignHistoryStoragePaths, buildVersion } from './versions';
 import { computeChecksum } from './crdt';
 import { isFirebaseConfigured } from './firebase-config';
 import { getApp } from 'firebase/app';
-import { getFirestore, collection, getDocs, setDoc, doc, deleteDoc } from 'firebase/firestore';
+import { getFirestore, collection, getDocs, setDoc, doc } from 'firebase/firestore';
 import { getStorage, ref, uploadString } from 'firebase/storage';
 
 function db() {
@@ -42,24 +42,27 @@ export async function recordVersion(input: {
   });
   const result = appendVersion(existing, built.version);
   if (result.skipped) return { skipped: true };
-  const version = built.version;
+
+  const contentBytes = new TextEncoder().encode(input.content).length;
+  let version = assignHistoryStoragePaths(existing, built.version, contentBytes);
+
+  // Large payloads: upload blob to Storage and drop inline content.
+  // Smaller payloads keep content in Firestore metadata; storagePath is the
+  // planned history blob key (snap/delta) for compaction / backend use.
   if (built.storagePathNeeded) {
     try {
       const storage = getStorage(getApp());
-      const path = `workspaces/${input.workspaceId}/versions/${input.fileId}/${version.id}.md`;
+      const path =
+        version.storagePath ||
+        `workspaces/${input.workspaceId}/versions/${input.fileId}/${version.id}.md`;
       await uploadString(ref(storage, path), input.content);
-      version.storagePath = path;
-      version.content = undefined;
+      version = { ...version, storagePath: path, content: undefined };
     } catch {
       console.warn('Version snapshot exceeds size; stored metadata only.');
     }
   }
+
+  // Unlimited retention: append only — never delete prior history events.
   await setDoc(doc(firestore, 'workspaces', input.workspaceId, 'versions', version.id), version);
-  const capped = capVersions([...existing, version]);
-  for (const v of existing) {
-    if (!capped.find(c => c.id === v.id)) {
-      await deleteDoc(doc(firestore, 'workspaces', input.workspaceId, 'versions', v.id));
-    }
-  }
   return { skipped: false, version };
 }
