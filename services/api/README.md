@@ -93,6 +93,29 @@ curl -s -X POST http://localhost:8080/v1/github/webhooks \
   -d '{"zen":"keep it simple"}'
 ```
 
+### Sync jobs (Cloud Tasks quiet commits)
+
+| Method | Path | Authz |
+|--------|------|-------|
+| POST | `/v1/sync/enqueue` | editor+ (Firebase bearer) |
+| POST | `/v1/internal/sync/run` | `X-Sync-Task-Secret` (Cloud Tasks) |
+
+Enqueue body: `{ "documentId", "workspaceId" }`.
+
+Response `202` is a `SyncJob` with `quietUntil ≈ now + 30s`. The memory/Cloud Tasks queue runs the job after the quiet window and commits via the GitHub App installation (stub locally). Transient commit failures re-queue with backoff.
+
+| Env | Purpose |
+|-----|---------|
+| `SYNC_QUIET_PERIOD_MS` | Quiet delay before run (default `30000`) |
+| `SYNC_TASKS_SECRET` | Shared secret for `/v1/internal/sync/run` (optional in local stub) |
+
+```bash
+curl -s -X POST http://localhost:8080/v1/sync/enqueue \
+  -H "Authorization: Bearer stub:alice" \
+  -H "content-type: application/json" \
+  -d '{"workspaceId":"ws-1","documentId":"doc-1"}'
+```
+
 ## Tests
 
 ```bash

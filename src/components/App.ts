@@ -44,6 +44,7 @@ import { showChangelogIfNew } from './ChangelogModal';
 import type { AudioControls } from '../lib/tts';
 import { createWorkspaceTree, hydrateRepoIndexes } from './WorkspaceTree';
 import { mountPresenceController } from '../lib/presence';
+import { setupQuietSyncEnqueue } from '../lib/quiet-sync-enqueue';
 
 
 export async function initApp(): Promise<void> {
@@ -90,6 +91,7 @@ export async function initApp(): Promise<void> {
   initAuthUI();
   mountPresenceController();
   setupAutoSync();
+  setupQuietSyncEnqueue();
 
   // Check if we arrived via a shared document URL
   await loadSharedDocFromURL();
