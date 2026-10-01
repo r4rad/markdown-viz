@@ -1,6 +1,6 @@
 # Cloud Run API (`services/api`)
 
-Trusted backend for invites, GitHub App, webhooks, and sync APIs.
+Trusted backend for invites, GitHub App, webhooks, sync APIs, and document history.
 
 ## Local run
 
@@ -120,6 +120,20 @@ curl -s -X POST http://localhost:8080/v1/sync/enqueue \
   -H "content-type: application/json" \
   -d '{"workspaceId":"ws-1","documentId":"doc-1"}'
 ```
+
+### History (unlimited snapshots + deltas)
+
+| Method | Path | Authz |
+|--------|------|-------|
+| GET | `/v1/history/:documentId?workspaceId=` | member |
+| POST | `/v1/history/:documentId` | editor+ (append event) |
+| POST | `/v1/history/:documentId/restore` | editor+ |
+
+Append body: `{ "workspaceId", "content", "source"?: "save"|"sync"|"conflict"|"git_import"|"mcp", "gitSha"? }`.
+
+Restore body: `{ "workspaceId", "eventId" }` — applies prior content as a **new** `restore` event; prior history is never deleted.
+
+Compaction writes periodic `.snap.zst` paths every 50 events (or ~1 MiB of deltas); intervening events use `.delta.zst`. Persistence is in-memory locally/CI; production uses Firestore metadata + Cloud Storage blobs.
 
 ## Tests
 

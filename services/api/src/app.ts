@@ -34,6 +34,12 @@ import {
   setDocumentSyncStore,
   type DocumentSyncStore,
 } from './conflicts/store.js';
+import { appendHistory, listHistory, restoreHistory } from './history/handlers.js';
+import {
+  getHistoryStore,
+  setHistoryStore,
+  type HistoryStore,
+} from './history/store.js';
 
 function sendJson(res: ServerResponse, status: number, body: unknown): void {
   const payload = JSON.stringify(body);
@@ -71,6 +77,7 @@ export type CreateServerOptions = {
   githubSyncCommitter?: GithubSyncCommitter;
   conflictStore?: ConflictStore;
   documentSyncStore?: DocumentSyncStore;
+  historyStore?: HistoryStore;
 };
 
 async function handleRequest(req: IncomingMessage, res: ServerResponse): Promise<void> {
@@ -273,6 +280,61 @@ async function handleRequest(req: IncomingMessage, res: ServerResponse): Promise
       return;
     }
 
+    const historyRestoreMatch = /^\/v1\/history\/([^/]+)\/restore$/.exec(pathname);
+    if (method === 'POST' && historyRestoreMatch) {
+      const documentId = decodeURIComponent(historyRestoreMatch[1]!);
+      const body = await readJsonBody(req);
+      if (body && typeof body === 'object' && '__parseError' in body) {
+        sendJson(res, 400, { error: 'invalid_json' });
+        return;
+      }
+      const result = await restoreHistory(auth.user, documentId, body, {
+        historyStore: getHistoryStore(),
+        inviteStore: store,
+      });
+      if (!result.ok) {
+        sendJson(res, result.status, { error: result.error });
+        return;
+      }
+      sendJson(res, 201, { event: result.event, content: result.content });
+      return;
+    }
+
+    const historyMatch = /^\/v1\/history\/([^/]+)$/.exec(pathname);
+    if (historyMatch) {
+      const documentId = decodeURIComponent(historyMatch[1]!);
+      if (method === 'GET') {
+        const workspaceId = url.searchParams.get('workspaceId');
+        const result = await listHistory(auth.user, documentId, workspaceId, {
+          historyStore: getHistoryStore(),
+          inviteStore: store,
+        });
+        if (!result.ok) {
+          sendJson(res, result.status, { error: result.error });
+          return;
+        }
+        sendJson(res, 200, { events: result.events });
+        return;
+      }
+      if (method === 'POST') {
+        const body = await readJsonBody(req);
+        if (body && typeof body === 'object' && '__parseError' in body) {
+          sendJson(res, 400, { error: 'invalid_json' });
+          return;
+        }
+        const result = await appendHistory(auth.user, documentId, body, {
+          historyStore: getHistoryStore(),
+          inviteStore: store,
+        });
+        if (!result.ok) {
+          sendJson(res, result.status, { error: result.error });
+          return;
+        }
+        sendJson(res, 201, { event: result.event });
+        return;
+      }
+    }
+
     sendJson(res, 404, { error: 'not_found', uid: auth.user.uid });
     return;
   }
@@ -299,6 +361,9 @@ export function createServer(options: CreateServerOptions = {}): http.Server {
   }
   if (options.documentSyncStore) {
     setDocumentSyncStore(options.documentSyncStore);
+  }
+  if (options.historyStore) {
+    setHistoryStore(options.historyStore);
   }
 
   // Default memory Cloud Tasks queue: call runSyncJob in-process after quietUntil.
