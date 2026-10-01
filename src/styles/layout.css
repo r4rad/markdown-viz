@@ -2594,4 +2594,115 @@
   background: color-mix(in srgb, var(--accent, #0969da) 8%, transparent);
 }
 
+/* ─── History side panel ─── */
+
+.history-panel {
+  width: 320px;
+  flex-shrink: 0;
+  border-left: 1px solid var(--border-primary);
+  background: var(--bg-toolbar, var(--bg-primary));
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.history-panel-collapsed {
+  display: none;
+}
+
+.history-panel-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--border-primary);
+}
+
+.history-panel-header h3 {
+  margin: 0;
+  font-size: 13px;
+}
+
+.history-panel-toolbar {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--border-primary);
+  font-size: 12px;
+}
+
+.history-panel-list {
+  flex: 1;
+  overflow: auto;
+  padding: 8px;
+  font-size: 12px;
+  min-height: 0;
+}
+
+.history-version-row {
+  display: block;
+  width: 100%;
+  text-align: left;
+  border: 1px solid var(--border-primary);
+  background: transparent;
+  color: inherit;
+  border-radius: 4px;
+  padding: 8px;
+  margin-bottom: 8px;
+  cursor: pointer;
+}
+
+.history-version-row.is-selected {
+  border-color: var(--accent, #0969da);
+  background: color-mix(in srgb, var(--accent, #0969da) 10%, transparent);
+}
+
+.history-version-meta {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+
+.history-version-source {
+  font-weight: 600;
+  text-transform: capitalize;
+}
+
+.history-version-time,
+.history-version-author {
+  display: block;
+  color: var(--text-muted);
+  font-size: 11px;
+}
+
+.history-version-sha {
+  display: block;
+  margin-top: 4px;
+  font-size: 11px;
+}
+
+.history-git-sha {
+  color: var(--accent, #0969da);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+
+.history-panel-diff {
+  border-top: 1px solid var(--border-primary);
+  max-height: 40%;
+  min-height: 120px;
+  overflow: auto;
+  padding: 8px 12px;
+}
+
+.history-diff-pre {
+  margin: 0;
+  font-size: 11px;
+  white-space: pre-wrap;
+  word-break: break-word;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+
 
