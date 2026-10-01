@@ -63,6 +63,36 @@ Email mismatch on accept returns `403` and leaves the invite `pending`.
 
 Persistence is an in-memory store locally/CI; production swaps in Firestore Admin.
 
+### GitHub App
+
+| Method | Path | Authz |
+|--------|------|-------|
+| POST | `/v1/github/installations/link` | workspace owner (Firebase bearer) |
+| POST | `/v1/github/webhooks` | GitHub `X-Hub-Signature-256` |
+
+Link body: `{ "workspaceId", "installationId", "owner", "repo", "syncBranch", "pathPrefix?" }`.
+
+Response is a `RepositoryLink` (metadata only). The App private key and webhook secret stay on Cloud Run — never in the JSON response or `VITE_*`.
+
+| Env | Purpose |
+|-----|---------|
+| `GITHUB_APP_ID` | GitHub App id |
+| `GITHUB_APP_PRIVATE_KEY` | PEM private key (Secret Manager) |
+| `GITHUB_APP_WEBHOOK_SECRET` | Webhook HMAC secret |
+
+Setting any of `VITE_GITHUB_APP_*` / `VITE_GITHUB_PRIVATE_KEY` / `VITE_GITHUB_WEBHOOK_SECRET` causes config load to fail closed.
+
+Webhook example (local):
+
+```bash
+# compute sha256=… HMAC of the raw body with GITHUB_APP_WEBHOOK_SECRET, then:
+curl -s -X POST http://localhost:8080/v1/github/webhooks \
+  -H "content-type: application/json" \
+  -H "x-hub-signature-256: sha256=…" \
+  -H "x-github-event: ping" \
+  -d '{"zen":"keep it simple"}'
+```
+
 ## Tests
 
 ```bash

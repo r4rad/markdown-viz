@@ -6,6 +6,8 @@ import {
   listWorkspaceInvites,
 } from './invites/handlers.js';
 import { getInviteStore, setInviteStore, type InviteStore } from './invites/store.js';
+import { handleGithubWebhook, linkInstallation } from './github/handlers.js';
+import { getRepoLinkStore, setRepoLinkStore, type RepoLinkStore } from './github/store.js';
 
 function sendJson(res: ServerResponse, status: number, body: unknown): void {
   const payload = JSON.stringify(body);
@@ -16,15 +18,20 @@ function sendJson(res: ServerResponse, status: number, body: unknown): void {
   res.end(payload);
 }
 
-async function readJsonBody(req: IncomingMessage): Promise<unknown> {
+async function readRawBody(req: IncomingMessage): Promise<Buffer> {
   const chunks: Buffer[] = [];
   for await (const chunk of req) {
     chunks.push(typeof chunk === 'string' ? Buffer.from(chunk) : chunk);
   }
-  const raw = Buffer.concat(chunks).toString('utf8').trim();
-  if (!raw) return {};
+  return Buffer.concat(chunks);
+}
+
+async function readJsonBody(req: IncomingMessage): Promise<unknown> {
+  const raw = await readRawBody(req);
+  const text = raw.toString('utf8').trim();
+  if (!text) return {};
   try {
-    return JSON.parse(raw) as unknown;
+    return JSON.parse(text) as unknown;
   } catch {
     return { __parseError: true };
   }
@@ -32,6 +39,7 @@ async function readJsonBody(req: IncomingMessage): Promise<unknown> {
 
 export type CreateServerOptions = {
   inviteStore?: InviteStore;
+  repoLinkStore?: RepoLinkStore;
 };
 
 async function handleRequest(req: IncomingMessage, res: ServerResponse): Promise<void> {
@@ -42,6 +50,23 @@ async function handleRequest(req: IncomingMessage, res: ServerResponse): Promise
 
   if (method === 'GET' && pathname === '/healthz') {
     sendJson(res, 200, { ok: true });
+    return;
+  }
+
+  // GitHub webhooks: signature auth only (no Firebase bearer).
+  if (method === 'POST' && pathname === '/v1/github/webhooks') {
+    const raw = await readRawBody(req);
+    const result = await handleGithubWebhook(req.headers, raw);
+    if (!result.ok) {
+      sendJson(res, result.status, { error: result.error });
+      return;
+    }
+    sendJson(res, 200, {
+      ok: true,
+      received: true,
+      event: result.event,
+      delivery: result.delivery,
+    });
     return;
   }
 
@@ -104,6 +129,26 @@ async function handleRequest(req: IncomingMessage, res: ServerResponse): Promise
       return;
     }
 
+    if (method === 'POST' && pathname === '/v1/github/installations/link') {
+      const body = await readJsonBody(req);
+      if (body && typeof body === 'object' && '__parseError' in body) {
+        sendJson(res, 400, { error: 'invalid_json' });
+        return;
+      }
+      const result = await linkInstallation(
+        auth.user,
+        body,
+        getRepoLinkStore(),
+        store,
+      );
+      if (!result.ok) {
+        sendJson(res, result.status, { error: result.error });
+        return;
+      }
+      sendJson(res, 201, result.link);
+      return;
+    }
+
     sendJson(res, 404, { error: 'not_found', uid: auth.user.uid });
     return;
   }
@@ -115,6 +160,9 @@ async function handleRequest(req: IncomingMessage, res: ServerResponse): Promise
 export function createServer(options: CreateServerOptions = {}): http.Server {
   if (options.inviteStore) {
     setInviteStore(options.inviteStore);
+  }
+  if (options.repoLinkStore) {
+    setRepoLinkStore(options.repoLinkStore);
   }
 
   return http.createServer((req, res) => {
