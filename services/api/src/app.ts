@@ -8,6 +8,23 @@ import {
 import { getInviteStore, setInviteStore, type InviteStore } from './invites/store.js';
 import { handleGithubWebhook, linkInstallation } from './github/handlers.js';
 import { getRepoLinkStore, setRepoLinkStore, type RepoLinkStore } from './github/store.js';
+import {
+  authorizeSyncTaskRequest,
+  enqueueSyncJob,
+  runSyncJob,
+} from './sync/handlers.js';
+import { getSyncJobStore, setSyncJobStore, type SyncJobStore } from './sync/store.js';
+import {
+  createMemorySyncTaskQueue,
+  getSyncTaskQueue,
+  setSyncTaskQueue,
+  type SyncTaskQueue,
+} from './sync/queue.js';
+import {
+  getGithubSyncCommitter,
+  setGithubSyncCommitter,
+  type GithubSyncCommitter,
+} from './sync/commit.js';
 
 function sendJson(res: ServerResponse, status: number, body: unknown): void {
   const payload = JSON.stringify(body);
@@ -40,6 +57,9 @@ async function readJsonBody(req: IncomingMessage): Promise<unknown> {
 export type CreateServerOptions = {
   inviteStore?: InviteStore;
   repoLinkStore?: RepoLinkStore;
+  syncJobStore?: SyncJobStore;
+  syncTaskQueue?: SyncTaskQueue;
+  githubSyncCommitter?: GithubSyncCommitter;
 };
 
 async function handleRequest(req: IncomingMessage, res: ServerResponse): Promise<void> {
@@ -67,6 +87,36 @@ async function handleRequest(req: IncomingMessage, res: ServerResponse): Promise
       event: result.event,
       delivery: result.delivery,
     });
+    return;
+  }
+
+  // Cloud Tasks → API: run SyncJob after quiet period (task secret, not Firebase).
+  if (method === 'POST' && pathname === '/v1/internal/sync/run') {
+    const gate = authorizeSyncTaskRequest(req.headers);
+    if (!gate.ok) {
+      sendJson(res, gate.status, { error: gate.error });
+      return;
+    }
+    const body = await readJsonBody(req);
+    if (body && typeof body === 'object' && '__parseError' in body) {
+      sendJson(res, 400, { error: 'invalid_json' });
+      return;
+    }
+    const jobId =
+      body && typeof body === 'object' && 'jobId' in body
+        ? String((body as { jobId: unknown }).jobId ?? '')
+        : '';
+    const result = await runSyncJob(jobId, {
+      jobStore: getSyncJobStore(),
+      repoStore: getRepoLinkStore(),
+      queue: getSyncTaskQueue(),
+      committer: getGithubSyncCommitter(),
+    });
+    if (!result.ok) {
+      sendJson(res, result.status, { error: result.error });
+      return;
+    }
+    sendJson(res, 200, { job: result.job, sha: result.sha ?? null });
     return;
   }
 
@@ -149,6 +199,25 @@ async function handleRequest(req: IncomingMessage, res: ServerResponse): Promise
       return;
     }
 
+    if (method === 'POST' && pathname === '/v1/sync/enqueue') {
+      const body = await readJsonBody(req);
+      if (body && typeof body === 'object' && '__parseError' in body) {
+        sendJson(res, 400, { error: 'invalid_json' });
+        return;
+      }
+      const result = await enqueueSyncJob(auth.user, body, {
+        jobStore: getSyncJobStore(),
+        inviteStore: store,
+        queue: getSyncTaskQueue(),
+      });
+      if (!result.ok) {
+        sendJson(res, result.status, { error: result.error });
+        return;
+      }
+      sendJson(res, 202, result.job);
+      return;
+    }
+
     sendJson(res, 404, { error: 'not_found', uid: auth.user.uid });
     return;
   }
@@ -163,6 +232,28 @@ export function createServer(options: CreateServerOptions = {}): http.Server {
   }
   if (options.repoLinkStore) {
     setRepoLinkStore(options.repoLinkStore);
+  }
+  if (options.syncJobStore) {
+    setSyncJobStore(options.syncJobStore);
+  }
+  if (options.githubSyncCommitter) {
+    setGithubSyncCommitter(options.githubSyncCommitter);
+  }
+
+  // Default memory Cloud Tasks queue: call runSyncJob in-process after quietUntil.
+  if (options.syncTaskQueue) {
+    setSyncTaskQueue(options.syncTaskQueue);
+  } else {
+    setSyncTaskQueue(
+      createMemorySyncTaskQueue(async (jobId) => {
+        await runSyncJob(jobId, {
+          jobStore: getSyncJobStore(),
+          repoStore: getRepoLinkStore(),
+          queue: getSyncTaskQueue(),
+          committer: getGithubSyncCommitter(),
+        });
+      }),
+    );
   }
 
   return http.createServer((req, res) => {
