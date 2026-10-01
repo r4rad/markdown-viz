@@ -95,17 +95,23 @@ function openWebkitDirectoryPicker(): void {
   input.click();
 }
 
+/** DOM typings omit async iterators on FileSystemDirectoryHandle in some TS targets. */
+type DirectoryHandleIterable = FileSystemDirectoryHandle & {
+  values(): AsyncIterableIterator<FileSystemHandle>;
+};
+
 async function walkDirectoryHandle(
   dir: FileSystemDirectoryHandle,
   prefix = '',
 ): Promise<DirectoryImportFile[]> {
   const out: DirectoryImportFile[] = [];
-  for await (const [name, handle] of dir.entries()) {
+  for await (const handle of (dir as DirectoryHandleIterable).values()) {
+    const name = handle.name;
     const rel = prefix ? `${prefix}/${name}` : name;
     if (handle.kind === 'directory') {
-      out.push(...await walkDirectoryHandle(handle, rel));
+      out.push(...await walkDirectoryHandle(handle as FileSystemDirectoryHandle, rel));
     } else if (handle.kind === 'file' && isMarkdownImportPath(name)) {
-      const file = await handle.getFile();
+      const file = await (handle as FileSystemFileHandle).getFile();
       out.push({
         relativePath: rel.replace(/\\/g, '/'),
         content: await readFileAsText(file),
