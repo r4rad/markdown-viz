@@ -99,10 +99,15 @@ curl -s -X POST http://localhost:8080/v1/github/webhooks \
 |--------|------|-------|
 | POST | `/v1/sync/enqueue` | editor+ (Firebase bearer) |
 | POST | `/v1/internal/sync/run` | `X-Sync-Task-Secret` (Cloud Tasks) |
+| POST | `/v1/conflicts/:id/resolve` | editor+ (Firebase bearer) |
 
 Enqueue body: `{ "documentId", "workspaceId" }`.
 
 Response `202` is a `SyncJob` with `quietUntil ≈ now + 30s`. The memory/Cloud Tasks queue runs the job after the quiet window and commits via the GitHub App installation (stub locally). Transient commit failures re-queue with backoff.
+
+When local and remote overlap on a push webhook, the API creates a durable `Conflict`, sets `syncStatus=Conflict`, and enqueue returns `409 blocked_conflict` until an editor resolves via keep-local / take-remote / merged.
+
+Resolve body: `{ "resolution": "local" | "remote" | "merged", "mergedContent"?: string }`.
 
 | Env | Purpose |
 |-----|---------|

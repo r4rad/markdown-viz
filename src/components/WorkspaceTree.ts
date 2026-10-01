@@ -146,9 +146,31 @@ export function createWorkspaceTree(): HTMLElement {
     const row = document.createElement('div');
     row.className = 'workspace-row workspace-file';
     row.style.paddingLeft = `${8 + depth * 14}px`;
-    row.textContent = name;
+    const tab = getState().tabs.find(t => t.id === id);
+    const sync = tab?.syncStatus ?? 'InSync';
+    const badge =
+      sync === 'InSync'
+        ? ''
+        : `<span class="sync-status-badge sync-status-${sync.toLowerCase()}" title="GitHub sync: ${sync}">${sync}</span>`;
+    row.innerHTML = `<span class="workspace-file-name">${escapeHtml(name)}</span>${badge}`;
     if (getState().activeTabId === id) row.classList.add('active');
-    row.addEventListener('click', () => switchTab(id));
+    if (sync === 'Conflict') row.classList.add('workspace-file-conflict');
+    row.addEventListener('click', () => {
+      switchTab(id);
+      if (sync === 'Conflict' && tab?.openConflictId) {
+        void import('./ConflictModal').then(({ openConflictModal }) => {
+          openConflictModal({
+            id: tab.openConflictId!,
+            documentId: id,
+            workspaceId: getState().activeWorkspaceId,
+            localContent: tab.content,
+            remoteContent: tab.content,
+            baseContent: tab.content,
+            conflictedPreview: tab.content,
+          });
+        });
+      }
+    });
     row.addEventListener('contextmenu', (ev) => {
       ev.preventDefault();
       showFileMenu(id, ev.clientX, ev.clientY);
