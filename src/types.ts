@@ -179,6 +179,8 @@ export interface DocVersion {
   checksum: string;
   content?: string;
   storagePath?: string;
+  /** Optional Git commit SHA when the event came from sync / import. */
+  gitSha?: string;
 }
 
 export type ActivityAction = 'edit' | 'restore' | 'sync' | 'mcp_write' | 'invite' | 'role_change' | 'conflict';

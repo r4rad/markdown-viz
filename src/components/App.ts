@@ -78,7 +78,9 @@ export async function initApp(): Promise<void> {
   mainArea.append(editorPane, splitHandle, previewPane);
   const { createCommentsPanel } = await import('./CommentsPanel');
   const commentsPanel = createCommentsPanel();
-  bodyRow.append(workspaceTree, mainArea, commentsPanel);
+  const { createHistoryPanel } = await import('./HistoryPanel');
+  const historyPanel = createHistoryPanel();
+  bodyRow.append(workspaceTree, mainArea, commentsPanel, historyPanel);
   app.append(toolbar, tabBar, createBetaBanner(), bodyRow, statusBar, audioPlayer);
   await hydrateRepoIndexes();
 

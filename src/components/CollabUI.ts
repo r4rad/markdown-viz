@@ -18,9 +18,7 @@ import {
   workspaceSwitcherLabel,
 } from '../lib/shared-workspace';
 import { inviteAcceptUrl } from '../lib/server-invites';
-import { listVersions, recordVersion } from '../lib/version-store';
-import { unifiedDiff } from '../lib/unified-diff';
-import { restoreApplies } from '../lib/versions';
+import { recordVersion } from '../lib/version-store';
 import { loadActivity, recordActivity } from '../lib/activity-store';
 import { filterActivity, activityToCsv, activityToMarkdown, ACTIVITY_DEFAULT_MS, ACTIVITY_MAX_MS } from '../lib/activity';
 import { applyWikiDirection } from '../lib/wiki-sync';
@@ -34,6 +32,7 @@ import { canQueryWorkspaceActivity, canSyncWiki } from '../lib/workspace-acl';
 import { isWikiSyncEnabled } from '../lib/feature-flags';
 import { openQuickNote, openResearchCapture, openTemplatePicker } from './TemplateUI';
 import { toggleCommentsPanel } from './CommentsPanel';
+import { openHistoryPanel } from './HistoryPanel';
 import type { Role, WikiMapping } from '../types';
 
 let personalSnapshot: { folders: typeof getState extends () => infer S ? never : never } | null = null;
@@ -269,64 +268,7 @@ async function openMembers() {
 }
 
 async function openHistory() {
-  const tab = getActiveTab();
-  const wsId = getState().activeWorkspaceId;
-  if (!tab || wsId === 'personal') {
-    window.alert('Open a file in a shared workspace (or save history there).');
-  }
-  const workspaceId = wsId === 'personal' ? 'personal' : wsId;
-  let versions = workspaceId === 'personal' ? [] : await listVersions(workspaceId, tab?.id || '');
-  const overlay = modal(`
-    <h3>Version history</h3>
-    <pre id="ver-list" style="max-height:200px;overflow:auto"></pre>
-    <textarea id="ver-diff" rows="8" style="width:100%"></textarea>
-    <p><button id="ver-save">Save checkpoint</button>
-    <button id="ver-restore">Restore selected</button>
-    <button data-close="1">Close</button></p>`);
-  const pre = overlay.querySelector('#ver-list') as HTMLElement;
-  const render = () => {
-    pre.textContent = versions.map(v => `${v.id.slice(0, 8)} ${v.source} ${new Date(v.createdAt).toISOString()} ${v.authorId}`).join('\n') || 'No versions';
-  };
-  render();
-  overlay.querySelector('#ver-save')!.addEventListener('click', async () => {
-    if (!tab || !canEditActiveWorkspace()) return;
-    const user = getCurrentUser();
-    const result = await recordVersion({
-      workspaceId: workspaceId === 'personal' ? 'personal' : workspaceId,
-      fileId: tab.id,
-      authorId: user?.uid || 'unknown',
-      source: 'save',
-      content: tab.content,
-    });
-    if (!result.skipped) await recordActivity({ workspaceId: workspaceId, action: 'edit', fileId: tab.id, checksum: result.version?.checksum });
-    if (workspaceId !== 'personal') versions = await listVersions(workspaceId, tab.id);
-    render();
-  });
-  overlay.querySelector('#ver-restore')!.addEventListener('click', async () => {
-    if (!restoreApplies(getState().currentRole) && wsId !== 'personal') {
-      window.alert('Viewers cannot restore.');
-      return;
-    }
-    if (!tab || !versions[0]) return;
-    const chosen = versions[0];
-    updateTabContent(tab.id, chosen.content || tab.content);
-    await recordVersion({
-      workspaceId,
-      fileId: tab.id,
-      authorId: getCurrentUser()?.uid || 'unknown',
-      source: 'restore',
-      content: chosen.content || tab.content,
-    });
-    await recordActivity({ workspaceId, action: 'restore', fileId: tab.id });
-    const diff = unifiedDiff(tab.content, chosen.content || '');
-    (overlay.querySelector('#ver-diff') as HTMLTextAreaElement).value = diff;
-  });
-  pre.addEventListener('click', () => {
-    if (versions.length < 1 || !tab) return;
-    (overlay.querySelector('#ver-diff') as HTMLTextAreaElement).value =
-      unifiedDiff(versions[1]?.content || tab.content, versions[0]?.content || tab.content, 'older', 'newer');
-  });
-  overlay.querySelector('[data-close]')!.addEventListener('click', () => overlay.remove());
+  await openHistoryPanel();
 }
 
 async function openActivity() {
