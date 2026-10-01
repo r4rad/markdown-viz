@@ -1,6 +1,17 @@
-import { getActiveTab } from './state';
 import { emit } from './events';
 import { htmlToMarkdown } from './html-to-markdown';
+import { isMarkdownPath } from './workspace';
+
+export type DirectoryImportFile = {
+  /** Path relative to the selected root folder, using `/` separators. */
+  relativePath: string;
+  content: string;
+};
+
+export type DirectoryImportPayload = {
+  rootName: string;
+  files: DirectoryImportFile[];
+};
 
 export function setupImport(): void {
   document.addEventListener('dragover', (e) => {
@@ -22,6 +33,16 @@ export function setupImport(): void {
 
 const SUPPORTED_EXTENSIONS = '.md,.markdown,.txt,.text,.mdx,.pdf,.doc,.docx,.odt,.rtf';
 
+/** True when a file name or relative path is markdown-only for folder import. */
+export function isMarkdownImportPath(path: string): boolean {
+  return isMarkdownPath(path);
+}
+
+/** Keep only `.md` / `.mdx` / `.markdown` paths (case-insensitive). */
+export function filterMarkdownRelativePaths(paths: string[]): string[] {
+  return paths.filter(isMarkdownImportPath);
+}
+
 export function openFilePicker(): void {
   const input = document.createElement('input');
   input.type = 'file';
@@ -32,6 +53,100 @@ export function openFilePicker(): void {
     }
   });
   input.click();
+}
+
+/**
+ * One-shot browser directory import (no continuous disk sync).
+ * Chromium: showDirectoryPicker; fallback: &lt;input webkitdirectory&gt;.
+ */
+export async function openDirectoryImport(): Promise<void> {
+  const picker = (window as Window & {
+    showDirectoryPicker?: (options?: { mode?: 'read' | 'readwrite' }) => Promise<FileSystemDirectoryHandle>;
+  }).showDirectoryPicker;
+
+  if (typeof picker === 'function') {
+    try {
+      const root = await picker.call(window, { mode: 'read' });
+      const files = await walkDirectoryHandle(root);
+      emit('directory-imported', { rootName: root.name, files } satisfies DirectoryImportPayload);
+      return;
+    } catch (err) {
+      if ((err as DOMException)?.name === 'AbortError') return;
+      console.warn('showDirectoryPicker failed; falling back to webkitdirectory', err);
+    }
+  }
+
+  openWebkitDirectoryPicker();
+}
+
+function openWebkitDirectoryPicker(): void {
+  const input = document.createElement('input');
+  input.type = 'file';
+  input.multiple = true;
+  input.setAttribute('webkitdirectory', '');
+  input.setAttribute('directory', '');
+  input.addEventListener('change', () => {
+    void (async () => {
+      if (!input.files?.length) return;
+      const payload = await filesFromFileList(input.files);
+      if (payload) emit('directory-imported', payload);
+    })();
+  });
+  input.click();
+}
+
+/** DOM typings omit async iterators on FileSystemDirectoryHandle in some TS targets. */
+type DirectoryHandleIterable = FileSystemDirectoryHandle & {
+  values(): AsyncIterableIterator<FileSystemHandle>;
+};
+
+async function walkDirectoryHandle(
+  dir: FileSystemDirectoryHandle,
+  prefix = '',
+): Promise<DirectoryImportFile[]> {
+  const out: DirectoryImportFile[] = [];
+  for await (const handle of (dir as DirectoryHandleIterable).values()) {
+    const name = handle.name;
+    const rel = prefix ? `${prefix}/${name}` : name;
+    if (handle.kind === 'directory') {
+      out.push(...await walkDirectoryHandle(handle as FileSystemDirectoryHandle, rel));
+    } else if (handle.kind === 'file' && isMarkdownImportPath(name)) {
+      const file = await (handle as FileSystemFileHandle).getFile();
+      out.push({
+        relativePath: rel.replace(/\\/g, '/'),
+        content: await readFileAsText(file),
+      });
+    }
+  }
+  return out;
+}
+
+async function filesFromFileList(fileList: FileList): Promise<DirectoryImportPayload | null> {
+  const all = Array.from(fileList);
+  if (!all.length) return null;
+
+  const firstRel = relativePathOf(all[0]);
+  const rootName = firstRel.split('/')[0] || 'Imported';
+  const files: DirectoryImportFile[] = [];
+
+  for (const file of all) {
+    const full = relativePathOf(file).replace(/\\/g, '/');
+    if (!isMarkdownImportPath(full)) continue;
+    const parts = full.split('/');
+    const within = parts[0] === rootName ? parts.slice(1).join('/') : full;
+    if (!within || !isMarkdownImportPath(within)) continue;
+    files.push({
+      relativePath: within,
+      content: await readFileAsText(file),
+    });
+  }
+
+  return { rootName, files };
+}
+
+function relativePathOf(file: File): string {
+  const withRel = file as File & { webkitRelativePath?: string };
+  return withRel.webkitRelativePath || file.name;
 }
 
 async function handleFile(file: File): Promise<void> {
