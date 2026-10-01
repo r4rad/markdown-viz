@@ -1,4 +1,13 @@
-import type { AppState, FileOrigin, FileTab, FolderId, GitHubRepoLink, Role, WorkspaceFolder } from '../types';
+import type {
+  AppState,
+  FileOrigin,
+  FileTab,
+  FolderId,
+  GitHubRepoLink,
+  Role,
+  SyncStatus,
+  WorkspaceFolder,
+} from '../types';
 import { emit } from './events';
 import { canWriteWorkspace } from './workspace-acl';
 import { emptyTemplateSettings } from './template-folders';
@@ -86,6 +95,8 @@ function createTab(
     createdAt: Date.now(),
     folderId: extras?.folderId ?? null,
     origin: extras?.origin ?? LOCAL_ORIGIN,
+    syncStatus: 'InSync',
+    openConflictId: null,
   };
 }
 
@@ -255,6 +266,20 @@ export function restoreState(saved: Partial<AppState>): void {
 export function toggleSidebar(): void {
   state.sidebarOpen = !state.sidebarOpen;
   emit('layout-changed', state);
+  emit('state-changed', state);
+}
+
+/** Update GitHub sync status badge (InSync / Ahead / Behind / Conflict). */
+export function setTabSyncStatus(
+  id: string,
+  syncStatus: SyncStatus,
+  openConflictId: string | null = null,
+): void {
+  const tab = state.tabs.find(t => t.id === id);
+  if (!tab) return;
+  tab.syncStatus = syncStatus;
+  tab.openConflictId = openConflictId;
+  emit('sync-status-changed', { id, syncStatus, openConflictId });
   emit('state-changed', state);
 }
 

@@ -159,6 +159,8 @@ describe('GitHub App link + webhook', () => {
       received: true,
       event: 'ping',
       delivery: 'delivery-1',
+      conflicts: [],
+      merged: [],
     });
 
     const bad = await postRaw('/v1/github/webhooks', raw, {

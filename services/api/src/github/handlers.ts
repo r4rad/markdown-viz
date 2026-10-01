@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import type { AuthUser } from '../middleware/auth.js';
 import { getInviteStore, type InviteStore } from '../invites/store.js';
+import { ingestRemoteChange } from '../conflicts/handlers.js';
 import { getGithubAppConfig, rejectViteGithubAppSecrets } from './config.js';
 import { getRepoLinkStore, type RepoLinkStore } from './store.js';
 import type { RepositoryLink } from './types.js';
@@ -13,6 +14,10 @@ export type WebhookOk = {
   received: true;
   event: string | null;
   delivery: string | null;
+  /** Documents that entered Conflict during this push (empty when none). */
+  conflicts?: Array<{ id: string; documentId: string; workspaceId: string }>;
+  /** Documents auto-merged cleanly. */
+  merged?: Array<{ documentId: string; workspaceId: string }>;
 };
 
 function isNonEmptyString(v: unknown): v is string {
@@ -94,11 +99,18 @@ export async function linkInstallation(
 
 /**
  * Ingest GitHub webhook after HMAC verification.
- * Skeleton: verify signature then acknowledge; merge/Conflict logic is task 5.3+.
+ * Push events run three-way merge (or create durable Conflict) for linked docs.
+ *
+ * Local/CI may include `markdownviz.documents[]` with remote content so tests
+ * do not need a live GitHub Contents API.
  */
 export async function handleGithubWebhook(
   headers: Record<string, string | string[] | undefined>,
   rawBody: Buffer,
+  deps: {
+    repoStore?: RepoLinkStore;
+    ingest?: typeof ingestRemoteChange;
+  } = {},
 ): Promise<WebhookOk | HandlerFail> {
   const viteCheck = rejectViteGithubAppSecrets();
   if (!viteCheck.ok) {
@@ -118,12 +130,89 @@ export async function handleGithubWebhook(
   const event = headerValue(headers['x-github-event']);
   const delivery = headerValue(headers['x-github-delivery']);
 
+  const conflicts: Array<{ id: string; documentId: string; workspaceId: string }> =
+    [];
+  const merged: Array<{ documentId: string; workspaceId: string }> = [];
+
+  if (event === 'push') {
+    await processPushWebhook(rawBody, conflicts, merged, deps);
+  }
+
   return {
     ok: true,
     received: true,
     event,
     delivery,
+    conflicts,
+    merged,
   };
+}
+
+async function processPushWebhook(
+  rawBody: Buffer,
+  conflicts: Array<{ id: string; documentId: string; workspaceId: string }>,
+  merged: Array<{ documentId: string; workspaceId: string }>,
+  deps: {
+    repoStore?: RepoLinkStore;
+    ingest?: typeof ingestRemoteChange;
+  },
+): Promise<void> {
+  let payload: Record<string, unknown>;
+  try {
+    payload = JSON.parse(rawBody.toString('utf8')) as Record<string, unknown>;
+  } catch {
+    return;
+  }
+
+  const ingest = deps.ingest ?? ingestRemoteChange;
+
+  // Prefer explicit document payloads (local/CI / App contents adapter).
+  const mv = payload.markdownviz as
+    | {
+        documents?: Array<{
+          workspaceId?: string;
+          documentId?: string;
+          path?: string;
+          remoteContent?: string;
+          remoteSha?: string;
+        }>;
+      }
+    | undefined;
+
+  if (mv?.documents?.length) {
+    for (const doc of mv.documents) {
+      if (
+        !isNonEmptyString(doc.workspaceId) ||
+        !isNonEmptyString(doc.path) ||
+        !isNonEmptyString(doc.remoteContent) ||
+        !isNonEmptyString(doc.remoteSha)
+      ) {
+        continue;
+      }
+      const result = await ingest({
+        workspaceId: doc.workspaceId.trim(),
+        documentId: isNonEmptyString(doc.documentId)
+          ? doc.documentId.trim()
+          : undefined,
+        path: doc.path.trim(),
+        remoteContent: doc.remoteContent,
+        remoteSha: doc.remoteSha.trim(),
+      });
+      if (!result.ok) continue;
+      if (result.conflict) {
+        conflicts.push({
+          id: result.conflict.id,
+          documentId: result.conflict.documentId,
+          workspaceId: result.conflict.workspaceId,
+        });
+      } else {
+        merged.push({
+          documentId: result.document.documentId,
+          workspaceId: result.document.workspaceId,
+        });
+      }
+    }
+  }
 }
 
 function headerValue(raw: string | string[] | undefined): string | null {

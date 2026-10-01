@@ -33,6 +33,7 @@ export function setupQuietSyncEnqueue(
           workspaceId: state.activeWorkspaceId,
           role: state.currentRole,
           documentId: tab?.id,
+          syncStatus: tab?.syncStatus,
         })
       ) {
         return;

@@ -25,6 +25,15 @@ import {
   setGithubSyncCommitter,
   type GithubSyncCommitter,
 } from './sync/commit.js';
+import { resolveConflict } from './conflicts/handlers.js';
+import {
+  getConflictStore,
+  setConflictStore,
+  type ConflictStore,
+  getDocumentSyncStore,
+  setDocumentSyncStore,
+  type DocumentSyncStore,
+} from './conflicts/store.js';
 
 function sendJson(res: ServerResponse, status: number, body: unknown): void {
   const payload = JSON.stringify(body);
@@ -60,6 +69,8 @@ export type CreateServerOptions = {
   syncJobStore?: SyncJobStore;
   syncTaskQueue?: SyncTaskQueue;
   githubSyncCommitter?: GithubSyncCommitter;
+  conflictStore?: ConflictStore;
+  documentSyncStore?: DocumentSyncStore;
 };
 
 async function handleRequest(req: IncomingMessage, res: ServerResponse): Promise<void> {
@@ -76,7 +87,9 @@ async function handleRequest(req: IncomingMessage, res: ServerResponse): Promise
   // GitHub webhooks: signature auth only (no Firebase bearer).
   if (method === 'POST' && pathname === '/v1/github/webhooks') {
     const raw = await readRawBody(req);
-    const result = await handleGithubWebhook(req.headers, raw);
+    const result = await handleGithubWebhook(req.headers, raw, {
+      repoStore: getRepoLinkStore(),
+    });
     if (!result.ok) {
       sendJson(res, result.status, { error: result.error });
       return;
@@ -86,6 +99,8 @@ async function handleRequest(req: IncomingMessage, res: ServerResponse): Promise
       received: true,
       event: result.event,
       delivery: result.delivery,
+      conflicts: result.conflicts ?? [],
+      merged: result.merged ?? [],
     });
     return;
   }
@@ -208,6 +223,7 @@ async function handleRequest(req: IncomingMessage, res: ServerResponse): Promise
       const result = await enqueueSyncJob(auth.user, body, {
         jobStore: getSyncJobStore(),
         inviteStore: store,
+        conflictStore: getConflictStore(),
         queue: getSyncTaskQueue(),
       });
       if (!result.ok) {
@@ -215,6 +231,45 @@ async function handleRequest(req: IncomingMessage, res: ServerResponse): Promise
         return;
       }
       sendJson(res, 202, result.job);
+      return;
+    }
+
+    const resolveMatch = /^\/v1\/conflicts\/([^/]+)\/resolve$/.exec(pathname);
+    if (method === 'POST' && resolveMatch) {
+      const conflictId = decodeURIComponent(resolveMatch[1]!);
+      const body = await readJsonBody(req);
+      if (body && typeof body === 'object' && '__parseError' in body) {
+        sendJson(res, 400, { error: 'invalid_json' });
+        return;
+      }
+      const result = await resolveConflict(auth.user, conflictId, body, {
+        conflictStore: getConflictStore(),
+        docStore: getDocumentSyncStore(),
+        inviteStore: store,
+      });
+      if (!result.ok) {
+        sendJson(res, result.status, { error: result.error });
+        return;
+      }
+      sendJson(res, 200, {
+        conflict: {
+          id: result.conflict.id,
+          documentId: result.conflict.documentId,
+          workspaceId: result.conflict.workspaceId,
+          baseSha: result.conflict.baseSha,
+          localChecksum: result.conflict.localChecksum,
+          remoteSha: result.conflict.remoteSha,
+          status: result.conflict.status,
+          resolution: result.conflict.resolution,
+        },
+        document: {
+          documentId: result.document.documentId,
+          workspaceId: result.document.workspaceId,
+          syncStatus: result.document.syncStatus,
+          localContent: result.document.localContent,
+          openConflictId: result.document.openConflictId ?? null,
+        },
+      });
       return;
     }
 
@@ -238,6 +293,12 @@ export function createServer(options: CreateServerOptions = {}): http.Server {
   }
   if (options.githubSyncCommitter) {
     setGithubSyncCommitter(options.githubSyncCommitter);
+  }
+  if (options.conflictStore) {
+    setConflictStore(options.conflictStore);
+  }
+  if (options.documentSyncStore) {
+    setDocumentSyncStore(options.documentSyncStore);
   }
 
   // Default memory Cloud Tasks queue: call runSyncJob in-process after quietUntil.

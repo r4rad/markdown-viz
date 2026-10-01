@@ -1,4 +1,4 @@
-import type { Role, WorkspaceKind } from '@markdown-viz/domain';
+import type { Role, SyncStatus, WorkspaceKind } from '@markdown-viz/domain';
 
 export type FolderId = string;
 export type FileId = string;
@@ -43,6 +43,10 @@ export interface FileTab {
   createdAt: number;
   folderId: FolderId | null;
   origin: FileOrigin;
+  /** GitHub mirror sync state (R6). Defaults to InSync when unset. */
+  syncStatus?: SyncStatus;
+  /** Open durable Conflict id when syncStatus === Conflict. */
+  openConflictId?: string | null;
 }
 
 // ─── Theme types ───
@@ -67,6 +71,8 @@ export type {
   RepositoryLink,
   SyncJob,
   Conflict,
+  ConflictResolution,
+  ConflictStatus,
   HistoryEvent,
   CommentAnchor,
   CommentMessage,

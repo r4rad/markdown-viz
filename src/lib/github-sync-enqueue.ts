@@ -31,9 +31,12 @@ export function shouldScheduleSyncEnqueue(input: {
   workspaceId: string | null | undefined;
   role: string | null | undefined;
   documentId: string | null | undefined;
+  /** When Conflict, autosync is blocked until resolve. */
+  syncStatus?: string | null | undefined;
 }): boolean {
   if (!input.apiConfigured) return false;
   if (!input.documentId) return false;
   if (!input.workspaceId || input.workspaceId === 'personal') return false;
+  if (input.syncStatus === 'Conflict') return false;
   return input.role === 'owner' || input.role === 'editor';
 }

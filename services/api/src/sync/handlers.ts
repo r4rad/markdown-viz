@@ -7,6 +7,10 @@ import {
   getGithubSyncCommitter,
   type GithubSyncCommitter,
 } from './commit.js';
+import {
+  getConflictStore,
+  type ConflictStore,
+} from '../conflicts/store.js';
 import { getSyncJobStore, type SyncJobStore } from './store.js';
 import { getSyncTaskQueue, type SyncTaskQueue } from './queue.js';
 import {
@@ -57,6 +61,7 @@ export async function enqueueSyncJob(
   deps: {
     jobStore?: SyncJobStore;
     inviteStore?: InviteStore;
+    conflictStore?: ConflictStore;
     queue?: SyncTaskQueue;
     now?: () => number;
     quietMs?: number;
@@ -84,6 +89,12 @@ export async function enqueueSyncJob(
   const role = await resolveEditorPlusRole(inviteStore, wsId, user.uid);
   if (!role) {
     return { ok: false, status: 403, error: 'editor_required' };
+  }
+
+  const conflictStore = deps.conflictStore ?? getConflictStore();
+  const openConflict = await conflictStore.findOpenByDocument(wsId, docId);
+  if (openConflict) {
+    return { ok: false, status: 409, error: 'blocked_conflict' };
   }
 
   const jobStore = deps.jobStore ?? getSyncJobStore();
