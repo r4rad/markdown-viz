@@ -110,7 +110,7 @@ export async function handleGithubWebhook(
     return { ok: false, status: 503, error: 'webhook_secret_not_configured' };
   }
 
-  const signature = headerValue(headers['x-hub-signature-256']);
+  const signature = headerValue(headers['x-hub-signature-256']) ?? undefined;
   if (!verifyGithubWebhookSignature(rawBody, signature, config.webhookSecret)) {
     return { ok: false, status: 401, error: 'invalid_signature' };
   }
