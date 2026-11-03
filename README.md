@@ -353,12 +353,21 @@ npm run test:coverage # Coverage report
 
 ## 🚢 Deploy
 
-```bash
-# Deploy hosting only
-npm run build && firebase deploy --only hosting
+**Automatic:** every push/merge to `develop` runs [`.github/workflows/deploy-firebase.yml`](.github/workflows/deploy-firebase.yml), which builds the SPA and deploys **Hosting + Firestore rules** to the existing `markdown-viz` Firebase project (`https://markdown-viz.web.app`). Manual re-runs are available via **Actions → Deploy Firebase → Run workflow**.
 
-# Deploy hosting + Firestore rules
-npm run build && firebase deploy
+Required GitHub Actions secrets (Settings → Secrets and variables → Actions):
+
+| Secret | Purpose |
+|--------|---------|
+| `FIREBASE_TOKEN` **or** `FIREBASE_SERVICE_ACCOUNT_MARKDOWN_VIZ` | Deploy auth (`firebase login:ci` token, or the Hosting service-account JSON) |
+| `VITE_FIREBASE_API_KEY` / `AUTH_DOMAIN` / `PROJECT_ID` / `STORAGE_BUCKET` / `MESSAGING_SENDER_ID` / `APP_ID` | Inlined into the production bundle |
+| `VITE_FIREBASE_DATABASE_URL` | Optional RTDB URL for presence |
+| `VITE_MAX_SYNC_TABS`, `VITE_AUTO_SYNC_INTERVAL_SECONDS`, EmailJS / sharing vars | Optional product config |
+| `VITE_API_BASE_URL`, `VITE_COLLAB_WS_URL` | Optional production API/collab endpoints (do not use localhost) |
+
+```bash
+# Manual local deploy (hosting + Firestore rules)
+npm run build && firebase deploy --only hosting,firestore:rules
 ```
 
 Chunk-size warnings for `viz.js` (~1.4 MB) and `editor.js` (~633 KB) are expected and acceptable — both are lazy-loaded or code-split by Vite.

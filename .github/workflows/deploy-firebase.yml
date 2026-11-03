@@ -1,0 +1,89 @@
+# Deploy the SPA to the existing Firebase Hosting project whenever
+# develop advances (PR merge or direct push) or via manual dispatch.
+name: Deploy Firebase
+
+on:
+  push:
+    branches: [develop]
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-firebase-live
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    name: Build & deploy Hosting
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+
+      - name: Install
+        run: npm ci
+
+      - name: Test SPA
+        run: npm run test:spa
+
+      - name: Build
+        env:
+          VITE_FIREBASE_API_KEY: ${{ secrets.VITE_FIREBASE_API_KEY }}
+          VITE_FIREBASE_AUTH_DOMAIN: ${{ secrets.VITE_FIREBASE_AUTH_DOMAIN }}
+          VITE_FIREBASE_PROJECT_ID: ${{ secrets.VITE_FIREBASE_PROJECT_ID }}
+          VITE_FIREBASE_STORAGE_BUCKET: ${{ secrets.VITE_FIREBASE_STORAGE_BUCKET }}
+          VITE_FIREBASE_MESSAGING_SENDER_ID: ${{ secrets.VITE_FIREBASE_MESSAGING_SENDER_ID }}
+          VITE_FIREBASE_APP_ID: ${{ secrets.VITE_FIREBASE_APP_ID }}
+          VITE_FIREBASE_DATABASE_URL: ${{ secrets.VITE_FIREBASE_DATABASE_URL }}
+          VITE_MAX_SYNC_TABS: ${{ secrets.VITE_MAX_SYNC_TABS }}
+          VITE_AUTO_SYNC_INTERVAL_SECONDS: ${{ secrets.VITE_AUTO_SYNC_INTERVAL_SECONDS }}
+          VITE_EMAILJS_SERVICE_ID: ${{ secrets.VITE_EMAILJS_SERVICE_ID }}
+          VITE_EMAILJS_TEMPLATE_ID: ${{ secrets.VITE_EMAILJS_TEMPLATE_ID }}
+          VITE_EMAILJS_PUBLIC_KEY: ${{ secrets.VITE_EMAILJS_PUBLIC_KEY }}
+          VITE_FEEDBACK_EMAIL: ${{ secrets.VITE_FEEDBACK_EMAIL }}
+          VITE_ENABLE_SHARING: ${{ secrets.VITE_ENABLE_SHARING }}
+          # Production API / collab URLs (optional). Leave unset for SPA-only hosting.
+          VITE_API_BASE_URL: ${{ secrets.VITE_API_BASE_URL }}
+          VITE_COLLAB_WS_URL: ${{ secrets.VITE_COLLAB_WS_URL }}
+        run: |
+          if [ -z "$VITE_FIREBASE_API_KEY" ] || [ -z "$VITE_FIREBASE_PROJECT_ID" ]; then
+            echo "::error::Missing VITE_FIREBASE_* secrets required for production build."
+            exit 1
+          fi
+          # Never bake localhost API/collab endpoints into the live bundle.
+          if [ "$VITE_API_BASE_URL" = "http://localhost:8080" ]; then
+            unset VITE_API_BASE_URL
+          fi
+          if [ "$VITE_COLLAB_WS_URL" = "ws://localhost:8081" ]; then
+            unset VITE_COLLAB_WS_URL
+          fi
+          export VITE_MAX_SYNC_TABS="${VITE_MAX_SYNC_TABS:-50}"
+          export VITE_AUTO_SYNC_INTERVAL_SECONDS="${VITE_AUTO_SYNC_INTERVAL_SECONDS:-60}"
+          export VITE_ENABLE_SHARING="${VITE_ENABLE_SHARING:-true}"
+          npm run build
+
+      - name: Deploy Hosting + Firestore rules
+        env:
+          FIREBASE_TOKEN: ${{ secrets.FIREBASE_TOKEN }}
+          GOOGLE_APPLICATION_CREDENTIALS_JSON: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_MARKDOWN_VIZ }}
+        run: |
+          if [ -n "$GOOGLE_APPLICATION_CREDENTIALS_JSON" ]; then
+            echo "$GOOGLE_APPLICATION_CREDENTIALS_JSON" > "${RUNNER_TEMP}/firebase-sa.json"
+            export GOOGLE_APPLICATION_CREDENTIALS="${RUNNER_TEMP}/firebase-sa.json"
+            unset FIREBASE_TOKEN
+          elif [ -z "$FIREBASE_TOKEN" ]; then
+            echo "::error::Set FIREBASE_TOKEN (firebase login:ci) or FIREBASE_SERVICE_ACCOUNT_MARKDOWN_VIZ."
+            exit 1
+          fi
+          # Skip Realtime Database — this project may not have an RTDB instance.
+          npx --yes firebase-tools@13 deploy \
+            --only hosting,firestore:rules \
+            --project markdown-viz \
+            --non-interactive
