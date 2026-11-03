@@ -16,7 +16,8 @@ export function migrateTab(tab: Partial<FileTab> & Pick<FileTab, 'id' | 'name' |
     createdAt: tab.createdAt ?? Date.now(),
     folderId: tab.folderId ?? null,
     origin,
-    syncStatus: tab.syncStatus ?? 'InSync',
+    // Keep explicit statuses; do not invent InSync for unlinked local tabs.
+    syncStatus: tab.syncStatus,
     openConflictId: tab.openConflictId ?? null,
   };
 }
