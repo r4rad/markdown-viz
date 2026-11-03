@@ -1,3 +1,14 @@
+/* Column shell so editor/preview stay viewport-bounded and can scroll. */
+.app-container {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  width: 100%;
+  overflow: hidden;
+  background: var(--bg-primary);
+  color: var(--text-primary);
+}
+
 .workspace-body {
   display: flex;
   flex: 1;
@@ -652,12 +663,17 @@
 .editor-pane, .preview-pane {
   flex: 1;
   min-width: 0;
+  min-height: 0;
   overflow: hidden;
   position: relative;
 }
 
 .editor-pane {
   background: var(--bg-editor);
+}
+
+.editor-pane > .cm-editor {
+  height: 100%;
 }
 
 .preview-pane {
