@@ -35,6 +35,15 @@ describe('htmlToMarkdown', () => {
     expect(md).toContain('- two');
   });
 
+  it('should convert nested lists with indentation', () => {
+    const md = htmlToMarkdown(
+      '<ul><li>one<ul><li>nested</li></ul></li><li>two</li></ul>',
+    );
+    expect(md).toContain('- one');
+    expect(md).toMatch(/\n\s+- nested/);
+    expect(md).toContain('- two');
+  });
+
   it('should convert ordered lists', () => {
     const md = htmlToMarkdown('<ol><li>first</li><li>second</li></ol>');
     expect(md).toContain('1. first');

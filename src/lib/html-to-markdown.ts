@@ -60,13 +60,12 @@ export function htmlToMarkdown(html: string): string {
         const alt = el.getAttribute('alt') || '';
         return `![${alt}](${src})`;
       }
-      case 'ul': {
-        return Array.from(el.children).map(li => `- ${walk(li).trim()}`).join('\n') + '\n\n';
-      }
-      case 'ol': {
-        return Array.from(el.children).map((li, i) => `${i + 1}. ${walk(li).trim()}`).join('\n') + '\n\n';
-      }
-      case 'li': return children();
+      case 'ul':
+        return renderList(el, 'ul') + '\n\n';
+      case 'ol':
+        return renderList(el, 'ol') + '\n\n';
+      case 'li':
+        return renderListItemChildren(el);
       case 'table': {
         const rows = Array.from(el.querySelectorAll('tr'));
         if (!rows.length) return '';
@@ -96,4 +95,41 @@ export function htmlToMarkdown(html: string): string {
   }
 
   return lines.join('').replace(/\n{3,}/g, '\n\n').trim();
+
+  function renderList(listEl: HTMLElement, type: 'ul' | 'ol', depth = 0): string {
+    const indent = '  '.repeat(depth);
+    return Array.from(listEl.children)
+      .filter((c) => (c as HTMLElement).tagName?.toLowerCase() === 'li')
+      .map((li, i) => {
+        const marker = type === 'ol' ? `${i + 1}.` : '-';
+        const body = renderListItemChildren(li as HTMLElement, depth);
+        const [first, ...rest] = body.split('\n');
+        const head = `${indent}${marker} ${first.trim()}`;
+        const tail = rest
+          .map((line) => (line.length ? `${indent}  ${line}` : ''))
+          .join('\n');
+        return tail ? `${head}\n${tail}` : head;
+      })
+      .join('\n');
+  }
+
+  function renderListItemChildren(li: HTMLElement, depth = 0): string {
+    const parts: string[] = [];
+    for (const child of Array.from(li.childNodes)) {
+      if (child.nodeType === Node.ELEMENT_NODE) {
+        const childEl = child as HTMLElement;
+        const tag = childEl.tagName.toLowerCase();
+        if (tag === 'ul' || tag === 'ol') {
+          parts.push('\n' + renderList(childEl, tag, depth + 1));
+          continue;
+        }
+        if (tag === 'p') {
+          parts.push(Array.from(childEl.childNodes).map(walk).join('').trim());
+          continue;
+        }
+      }
+      parts.push(walk(child));
+    }
+    return parts.join('').trim();
+  }
 }
