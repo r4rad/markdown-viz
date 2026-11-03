@@ -1,5 +1,6 @@
 import { emit } from './events';
 import { htmlToMarkdown } from './html-to-markdown';
+import { buildPdfMarkdown, pdfTextItemsToLines } from './pdf-text';
 import { isMarkdownPath } from './workspace';
 
 export type DirectoryImportFile = {
@@ -160,7 +161,11 @@ async function handleFile(file: File): Promise<void> {
       content = await convertPdfToMarkdown(file);
     } else if (ext === 'docx') {
       content = await convertDocxToMarkdown(file);
-    } else if (ext === 'doc' || ext === 'odt' || ext === 'rtf') {
+    } else if (ext === 'doc') {
+      throw new Error(
+        'Legacy .doc (Word 97–2003) is not supported in the browser. Save as .docx or .pdf and import again.',
+      );
+    } else if (ext === 'odt' || ext === 'rtf') {
       content = await convertRichTextFallback(file, ext);
     } else {
       // Plain text / markdown files
@@ -171,10 +176,14 @@ async function handleFile(file: File): Promise<void> {
     emit('file-imported', { name, content });
   } catch (err) {
     console.error(`Import failed for ${file.name}:`, err);
-    // Fallback: try reading as plain text
+    // Binary formats must not fall back to FileReader text (garbage / mojibake)
+    if (ext === 'pdf' || ext === 'docx' || ext === 'doc' || ext === 'odt') {
+      alert(`Failed to import ${file.name}: ${err}`);
+      return;
+    }
     try {
-      const content = await readFileAsText(file);
-      emit('file-imported', { name: baseName + '.md', content });
+      const fallback = await readFileAsText(file);
+      emit('file-imported', { name: baseName + '.md', content: fallback });
     } catch {
       alert(`Failed to import ${file.name}: ${err}`);
     }
@@ -210,50 +219,49 @@ async function convertPdfToMarkdown(file: File): Promise<string> {
 
   const buffer = await readFileAsArrayBuffer(file);
   const pdf = await pdfjsLib.getDocument({ data: buffer }).promise;
-  const lines: string[] = [];
-
-  lines.push(`# ${file.name.replace(/\.pdf$/i, '')}\n`);
+  const pages: string[][] = [];
 
   for (let i = 1; i <= pdf.numPages; i++) {
     const page = await pdf.getPage(i);
     const textContent = await page.getTextContent();
-
-    if (pdf.numPages > 1) {
-      lines.push(`\n---\n\n## Page ${i}\n`);
-    }
-
-    let lastY: number | null = null;
-    let currentLine = '';
-
-    for (const item of textContent.items) {
-      if (!('str' in item)) continue;
-      const textItem = item as { str: string; transform: number[]; height: number };
-      const y = Math.round(textItem.transform[5]);
-
-      if (lastY !== null && Math.abs(y - lastY) > 2) {
-        if (currentLine.trim()) lines.push(currentLine.trim());
-        currentLine = '';
-
-        // Detect paragraph breaks (larger gaps)
-        if (lastY !== null && Math.abs(y - lastY) > textItem.height * 1.5) {
-          lines.push('');
-        }
-      }
-
-      currentLine += textItem.str;
-      lastY = y;
-    }
-
-    if (currentLine.trim()) lines.push(currentLine.trim());
+    const items = textContent.items
+      .filter((item): item is typeof item & { str: string } => 'str' in item)
+      .map((item) => {
+        const t = item as {
+          str: string;
+          transform: number[];
+          width?: number;
+          height?: number;
+        };
+        return {
+          str: t.str,
+          transform: t.transform,
+          width: t.width,
+          height: t.height,
+        };
+      });
+    pages.push(pdfTextItemsToLines(items));
   }
 
-  return lines.join('\n');
+  const title = file.name.replace(/\.pdf$/i, '');
+  return buildPdfMarkdown(title, pages);
 }
 
 async function convertDocxToMarkdown(file: File): Promise<string> {
   const mammoth = await import('mammoth');
   const buffer = await readFileAsArrayBuffer(file);
-  const result = await mammoth.convertToHtml({ arrayBuffer: buffer });
+
+  const convertImage = mammoth.images.imgElement(async (image) => {
+    const imageBuffer = await image.read('base64');
+    return {
+      src: `data:${image.contentType};base64,${imageBuffer}`,
+    };
+  });
+
+  const result = await mammoth.convertToHtml(
+    { arrayBuffer: buffer },
+    { convertImage },
+  );
 
   if (result.messages?.length) {
     console.info('DOCX conversion messages:', result.messages);
@@ -263,15 +271,33 @@ async function convertDocxToMarkdown(file: File): Promise<string> {
 }
 
 async function convertRichTextFallback(file: File, ext: string): Promise<string> {
-  // For formats without dedicated parsers, try reading as text
-  const text = await readFileAsText(file);
+  // RTF is mostly ASCII; ODT is a zip — reject binary zip signatures
+  const buffer = await readFileAsArrayBuffer(file);
+  const head = new Uint8Array(buffer.slice(0, 4));
+  const isZip = head[0] === 0x50 && head[1] === 0x4b; // PK
+  if (isZip || ext === 'odt') {
+    throw new Error(
+      `Cannot parse .${ext} in the browser. Export to .docx or .pdf and import again.`,
+    );
+  }
 
+  const text = await readFileAsText(file);
   if (!text.trim()) {
     throw new Error(`Cannot read .${ext} file. Please convert to .docx or .pdf first.`);
   }
 
-  // Wrap plain text with a note about the source format
-  return `<!-- Imported from .${ext} file - some formatting may be lost -->\n\n${text}`;
+  // Strip simple RTF control words when present
+  const cleaned =
+    ext === 'rtf'
+      ? text
+          .replace(/\{\\rtf1[\s\S]*?(?=\\pard|\\plain|[A-Za-z])/i, '')
+          .replace(/\\[a-z]+\d* ?/gi, '')
+          .replace(/[{}]/g, '')
+          .replace(/\r\n/g, '\n')
+          .trim()
+      : text;
+
+  return `<!-- Imported from .${ext} file — some formatting may be lost -->\n\n${cleaned || text}`;
 }
 
 export async function importFromGitHubURL(url: string): Promise<void> {
