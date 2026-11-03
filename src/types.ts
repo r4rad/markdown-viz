@@ -43,7 +43,7 @@ export interface FileTab {
   createdAt: number;
   folderId: FolderId | null;
   origin: FileOrigin;
-  /** GitHub mirror sync state (R6). Defaults to InSync when unset. */
+  /** GitHub mirror sync state (R6). Unset means not mirrored / Off in the UI. */
   syncStatus?: SyncStatus;
   /** Open durable Conflict id when syncStatus === Conflict. */
   openConflictId?: string | null;

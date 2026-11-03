@@ -19,8 +19,9 @@ Rules:
 - Output ONLY the spoken script — no headings, no bullet points, no markdown.`;
 
 export function getGroqApiKey(): string | null {
-  // localStorage takes precedence (user-entered via Settings), then build-time env var
-  return localStorage.getItem(GROQ_KEY_STORAGE) || (import.meta.env.VITE_GROQ_API_KEY as string | undefined) || null;
+  // Settings → AI Audio only. Never read VITE_GROQ_API_KEY — Vite would ship it in the client bundle.
+  const stored = localStorage.getItem(GROQ_KEY_STORAGE)?.trim();
+  return stored || null;
 }
 
 export function setGroqApiKey(key: string): void {

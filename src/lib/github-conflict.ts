@@ -1,5 +1,5 @@
 import { apiFetch, isApiConfigured } from './api-client';
-import type { Conflict, ConflictResolution, SyncStatus } from '../types';
+import type { Conflict, ConflictResolution, FileTab, SyncStatus, WorkspaceFolder } from '../types';
 
 export type ResolveConflictResponse = {
   conflict: Conflict;
@@ -67,7 +67,35 @@ export function syncStatusLabel(status: SyncStatus | undefined | null): string {
     case 'Conflict':
       return 'Conflict';
     case 'InSync':
-    default:
       return 'InSync';
+    default:
+      return 'Off';
   }
+}
+
+/** True when this tab is actually mirrored to GitHub (not a personal scratch file). */
+export function tabHasGithubMirror(
+  tab: FileTab | null | undefined,
+  folders: WorkspaceFolder[] = [],
+): boolean {
+  if (!tab) return false;
+  if (tab.origin.kind === 'github') return true;
+  if (!tab.folderId) return false;
+  return !!folders.find((f) => f.id === tab.folderId)?.repoLink;
+}
+
+/**
+ * Badge text for the status bar. Unlinked local docs must not claim InSync.
+ * Without Cloud Run API config, only an open Conflict is still shown.
+ */
+export function githubSyncBadgeLabel(
+  tab: FileTab | null | undefined,
+  folders: WorkspaceFolder[] = [],
+  apiConfigured = isApiConfigured(),
+): string {
+  if (!tab) return 'Off';
+  if (tab.syncStatus === 'Conflict') return 'Conflict';
+  if (!tabHasGithubMirror(tab, folders)) return 'Off';
+  if (!apiConfigured) return 'Off';
+  return syncStatusLabel(tab.syncStatus ?? 'InSync');
 }

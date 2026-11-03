@@ -180,7 +180,19 @@ function createPreview(): HTMLElement {
   body.innerHTML = [
     '<p><strong>Team docs</strong> live in the workspace, not in a personal scratch file.</p>',
     '<p>Collaboration stays on the document. Diagrams render in the preview.</p>',
-    '<pre>graph LR\n  Spec --> Review\n  Review --> GitHub</pre>',
+    '<figure class="landing-diagram" aria-label="Spec flows to Review then GitHub">',
+    '<svg viewBox="0 0 320 72" role="img" xmlns="http://www.w3.org/2000/svg">',
+    '<rect x="8" y="20" width="72" height="32" rx="6" fill="currentColor" opacity="0.08" stroke="currentColor" stroke-opacity="0.35"/>',
+    '<text x="44" y="40" text-anchor="middle" font-size="12" fill="currentColor">Spec</text>',
+    '<path d="M86 36h28" stroke="currentColor" stroke-opacity="0.45" stroke-width="1.5" marker-end="url(#landing-arrow)"/>',
+    '<rect x="120" y="20" width="80" height="32" rx="6" fill="currentColor" opacity="0.08" stroke="currentColor" stroke-opacity="0.35"/>',
+    '<text x="160" y="40" text-anchor="middle" font-size="12" fill="currentColor">Review</text>',
+    '<path d="M206 36h28" stroke="currentColor" stroke-opacity="0.45" stroke-width="1.5" marker-end="url(#landing-arrow)"/>',
+    '<rect x="240" y="20" width="72" height="32" rx="6" fill="currentColor" opacity="0.08" stroke="currentColor" stroke-opacity="0.35"/>',
+    '<text x="276" y="40" text-anchor="middle" font-size="12" fill="currentColor">GitHub</text>',
+    '<defs><marker id="landing-arrow" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 Z" fill="currentColor" fill-opacity="0.45"/></marker></defs>',
+    '</svg>',
+    '</figure>',
   ].join('');
 
   preview.append(bar, body);

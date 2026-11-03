@@ -8,7 +8,19 @@
     ],
     "rewrites": [
       {
-        "source": "**",
+        "source": "/app",
+        "destination": "/index.html"
+      },
+      {
+        "source": "/app/**",
+        "destination": "/index.html"
+      },
+      {
+        "source": "/shared/**",
+        "destination": "/index.html"
+      },
+      {
+        "source": "/invite/**",
         "destination": "/index.html"
       }
     ],

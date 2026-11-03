@@ -95,7 +95,7 @@ function createTab(
     createdAt: Date.now(),
     folderId: extras?.folderId ?? null,
     origin: extras?.origin ?? LOCAL_ORIGIN,
-    syncStatus: 'InSync',
+    // Unset until a GitHub mirror exists — avoids a false "InSync" badge.
     openConflictId: null,
   };
 }

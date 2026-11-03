@@ -19,12 +19,13 @@ import {
   threadsToGutterMarks,
 } from '../lib/comment-gutter';
 import { focusCommentThread } from './CommentsPanel';
+import { createScrollSyncGate } from '../lib/scroll-sync-gate';
 import type { CommentThread, FileTab, PresencePeer } from '../types';
 
 let view: EditorView | null = null;
 let editorContainer: HTMLElement | null = null;
 let ignoreNextUpdate = false;
-let ignoreEditorScroll = false;
+const editorScrollGate = createScrollSyncGate();
 /** Keeps the editor non-editable for commentator/viewer without blocking programmatic loads. */
 const editableCompartment = new Compartment();
 
@@ -240,11 +241,11 @@ function getExtensions(): Extension[] {
     }),
     EditorView.domEventHandlers({
       scroll: (_, v) => {
-        if (getState().syncScroll && !ignoreEditorScroll) {
-          const scrollInfo = v.scrollDOM;
-          const ratio = scrollInfo.scrollTop / (scrollInfo.scrollHeight - scrollInfo.clientHeight || 1);
-          emit('editor-scroll', ratio);
-        }
+        if (!getState().syncScroll || editorScrollGate.isLocked()) return;
+        const scrollInfo = v.scrollDOM;
+        const max = scrollInfo.scrollHeight - scrollInfo.clientHeight;
+        if (max <= 0) return;
+        emit('editor-scroll', scrollInfo.scrollTop / max);
       },
     }),
     EditorView.lineWrapping,
@@ -309,10 +310,12 @@ export function createEditor(): HTMLElement {
   // Bidirectional sync: scroll editor when preview scrolls
   on('preview-scroll', (ratio: unknown) => {
     if (!view || !getState().syncScroll) return;
-    ignoreEditorScroll = true;
-    const sd = view.scrollDOM;
-    sd.scrollTop = (ratio as number) * (sd.scrollHeight - sd.clientHeight);
-    requestAnimationFrame(() => { ignoreEditorScroll = false; });
+    editorScrollGate.run(() => {
+      const sd = view!.scrollDOM;
+      const max = sd.scrollHeight - sd.clientHeight;
+      if (max <= 0) return;
+      sd.scrollTop = (ratio as number) * max;
+    });
   });
 
   on('presence-changed', (peers: unknown) => {
