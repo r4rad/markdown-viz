@@ -164,6 +164,7 @@ export async function syncToCloud(state: AppState): Promise<boolean> {
         scrollPreview: tab.scrollPreview,
         updatedAt: tab.updatedAt,
         createdAt: tab.createdAt,
+        lastOpenedAt: tab.lastOpenedAt ?? tab.updatedAt,
         folderId: tab.folderId ?? null,
         origin: tab.origin ?? LOCAL_ORIGIN,
       }, { merge: true });

@@ -14,6 +14,7 @@ export function migrateTab(tab: Partial<FileTab> & Pick<FileTab, 'id' | 'name' |
     dirty: tab.dirty ?? false,
     updatedAt: tab.updatedAt ?? Date.now(),
     createdAt: tab.createdAt ?? Date.now(),
+    lastOpenedAt: tab.lastOpenedAt ?? tab.updatedAt ?? Date.now(),
     folderId: tab.folderId ?? null,
     origin,
     syncStatus: tab.syncStatus ?? 'InSync',
