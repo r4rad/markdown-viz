@@ -64,10 +64,9 @@ export function createWorkspaceTree(): HTMLElement {
       emit('import-directory');
     }
     if ((e.target as HTMLElement).closest('[data-act="collab"]')) {
-      const acts = workspaceActions();
-      const pick = window.prompt(acts.map((a, i) => `${i + 1}. ${a[0]}`).join('\n'));
-      const n = Number(pick) - 1;
-      if (acts[n]) acts[n][1]();
+      const btn = (e.target as HTMLElement).closest('[data-act="collab"]') as HTMLElement;
+      const rect = btn.getBoundingClientRect();
+      showWorkspaceActionsMenu(rect.left, rect.bottom + 4);
     }
   });
 
@@ -176,6 +175,29 @@ export function createWorkspaceTree(): HTMLElement {
       showFileMenu(id, ev.clientX, ev.clientY);
     });
     return row;
+  }
+
+  function showWorkspaceActionsMenu(x: number, y: number): void {
+    closeMenus();
+    const menu = document.createElement('div');
+    menu.className = 'workspace-menu';
+    menu.style.left = `${x}px`;
+    menu.style.top = `${y}px`;
+    menu.setAttribute('role', 'menu');
+    menu.setAttribute('aria-label', 'Workspace actions');
+    for (const [label, fn] of workspaceActions()) {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.setAttribute('role', 'menuitem');
+      b.textContent = label;
+      b.addEventListener('click', () => {
+        closeMenus();
+        fn();
+      });
+      menu.appendChild(b);
+    }
+    document.body.appendChild(menu);
+    setTimeout(() => document.addEventListener('click', closeMenus, { once: true }), 0);
   }
 
   function showFolderMenu(folder: WorkspaceFolder, x: number, y: number): void {

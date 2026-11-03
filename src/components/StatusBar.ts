@@ -1,8 +1,9 @@
 import { on } from '../lib/events';
 import { getActiveTab, getState } from '../lib/state';
-import { syncStatusLabel } from '../lib/github-conflict';
+import { githubSyncBadgeLabel } from '../lib/github-conflict';
+import { isApiConfigured } from '../lib/api-client';
 import { openConflictModal } from './ConflictModal';
-import type { SyncStatus } from '../types';
+import type { FileTab } from '../types';
 
 export function createStatusBar(): HTMLElement {
   const el = document.createElement('div');
@@ -15,7 +16,7 @@ export function createStatusBar(): HTMLElement {
     <span class="status-item" id="status-lines">0 lines</span>
     <span class="status-item" id="status-reading">~0 min read</span>
     <span class="status-spacer"></span>
-    <button type="button" class="status-item status-github-sync" id="status-github-sync" title="GitHub sync status">Git: InSync</button>
+    <button type="button" class="status-item status-github-sync" id="status-github-sync" title="GitHub sync status">Git: Off</button>
     <span class="status-item" id="status-sync">Sync: On</span>
     <span class="status-item">Markdown</span>
     <span class="status-separator"></span>
@@ -47,9 +48,9 @@ export function createStatusBar(): HTMLElement {
   });
 
   on('active-tab-changed', (tab: unknown) => {
-    const t = tab as { content: string; syncStatus?: SyncStatus } | null;
+    const t = tab as FileTab | null;
     if (t?.content !== undefined) updateStats(el, t.content);
-    updateGithubSyncBadge(el, t?.syncStatus);
+    updateGithubSyncBadge(el, t);
   });
 
   on('cursor-changed', (data: unknown) => {
@@ -62,39 +63,45 @@ export function createStatusBar(): HTMLElement {
   });
 
   on('sync-status-changed', () => {
-    updateGithubSyncBadge(el, getActiveTab()?.syncStatus);
+    updateGithubSyncBadge(el, getActiveTab());
   });
 
   on('state-changed', () => {
-    updateGithubSyncBadge(el, getActiveTab()?.syncStatus);
+    updateGithubSyncBadge(el, getActiveTab());
   });
 
   on('state-restored', () => {
     const tab = getActiveTab();
     if (tab) updateStats(el, tab.content);
     el.querySelector('#status-sync')!.textContent = `Sync: ${getState().syncScroll ? 'On' : 'Off'}`;
-    updateGithubSyncBadge(el, tab?.syncStatus);
+    updateGithubSyncBadge(el, tab);
   });
 
   // Initialize immediately from current active tab (state may already be restored)
   const tab = getActiveTab();
   if (tab) updateStats(el, tab.content);
   el.querySelector('#status-sync')!.textContent = `Sync: ${getState().syncScroll ? 'On' : 'Off'}`;
-  updateGithubSyncBadge(el, tab?.syncStatus);
+  updateGithubSyncBadge(el, tab);
 
   return el;
 }
 
-function updateGithubSyncBadge(el: HTMLElement, status: SyncStatus | undefined | null): void {
+function updateGithubSyncBadge(el: HTMLElement, tab: FileTab | null | undefined): void {
   const btn = el.querySelector('#status-github-sync') as HTMLButtonElement;
-  const label = syncStatusLabel(status);
+  const folders = getState().folders;
+  const label = githubSyncBadgeLabel(tab, folders, isApiConfigured());
   btn.textContent = `Git: ${label}`;
   btn.dataset.syncStatus = label;
   btn.classList.toggle('status-github-sync-conflict', label === 'Conflict');
-  btn.title =
-    label === 'Conflict'
-      ? 'Conflict — click to resolve (keep local / take remote / merged)'
-      : `GitHub sync: ${label}`;
+  if (label === 'Conflict') {
+    btn.title = 'Conflict — click to resolve (keep local / take remote / merged)';
+  } else if (label === 'Off') {
+    btn.title = isApiConfigured()
+      ? 'GitHub sync: Off — link a folder to a repo or open a GitHub-backed file'
+      : 'GitHub sync: Off — set VITE_API_BASE_URL and link a repo to enable sync';
+  } else {
+    btn.title = `GitHub sync: ${label}`;
+  }
 }
 
 function updateStats(el: HTMLElement, content: string): void {

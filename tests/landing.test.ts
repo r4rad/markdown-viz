@@ -41,6 +41,8 @@ describe('landing page', () => {
     expect(featureText).toMatch(/Realtime collaboration/);
     expect(featureText).toMatch(/Diagrams/);
     expect(featureText).toMatch(/GitHub sync/);
+    expect(page?.querySelector('.landing-diagram svg')).toBeTruthy();
+    expect(page?.querySelector('.landing-diagram')?.textContent).toMatch(/Spec/);
   });
 
   it('opens /app from guest Open editor without signing in', () => {

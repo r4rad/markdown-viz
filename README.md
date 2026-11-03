@@ -176,19 +176,11 @@ The included `firestore.rules` enforces user-scoped access:
 
 ### Optional: Groq API key for AI audio summaries
 
-Sign up at [console.groq.com](https://console.groq.com/keys) for a free API key (no credit card required — 30 req/min, 14,400/day). Two ways to configure it:
+Sign up at [console.groq.com](https://console.groq.com/keys) for a free API key (no credit card required — 30 req/min, 14,400/day).
 
-**Option A — env var (recommended for self-hosting):** Add to `.env.local` (never commit this file):
-```env
-VITE_GROQ_API_KEY=gsk_your_key_here
-```
-The app reads it at startup — no manual UI entry needed.
+Enter the key in the app via **Settings → AI Audio (Groq)** (stored in `localStorage` only).
 
-**Option B — runtime (for any deployment):**
-1. Open the app → **Settings → AI Audio (Groq)**
-2. Paste your key and click **Save**
-
-`localStorage` always takes precedence over the env var, so both can coexist.
+Do **not** set `VITE_GROQ_API_KEY` — Vite inlines `VITE_*` values into the public JS bundle.
 
 ### Optional: EmailJS for feedback email delivery
 
@@ -215,7 +207,6 @@ All variables are optional. Copy `.env.example` to `.env.local` and override wha
 | `VITE_FIREBASE_STORAGE_BUCKET` | — | Firebase storage bucket |
 | `VITE_FIREBASE_MESSAGING_SENDER_ID` | — | Firebase messaging sender ID |
 | `VITE_FIREBASE_APP_ID` | — | Firebase app ID |
-| `VITE_GROQ_API_KEY` | — | Groq API key for AI audio (free tier at console.groq.com) |
 | `VITE_MAX_SYNC_TABS` | `50` | Max personal files stored in cloud sync per account |
 | `VITE_AUTO_SYNC_INTERVAL_SECONDS` | `60` | Auto-sync interval for signed-in users (seconds) |
 | `VITE_EMAILJS_SERVICE_ID` | — | EmailJS service ID (feedback email) |
