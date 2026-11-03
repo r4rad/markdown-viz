@@ -200,6 +200,20 @@
   white-space: pre-wrap;
 }
 
+.landing-diagram {
+  margin: 0.9rem 0 0;
+  padding: 0.65rem 0.5rem;
+  background: #f6f8fa;
+  border-radius: 8px;
+  color: #24292f;
+}
+
+.landing-diagram svg {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
 .landing-section h2,
 .landing-closing h2 {
   font-size: 1.6rem;
