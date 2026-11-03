@@ -6,6 +6,8 @@ import { openSettingsMenu } from './SettingsMenu';
 import { isSharingEnabled } from '../lib/share';
 import { setPreviewEditable, isPreviewEditable } from './Preview';
 import { openQuickNote, openResearchCapture, openTemplatePicker } from './TemplateUI';
+import { toggleCommentsPanel } from './CommentsPanel';
+import { toggleHistoryPanel } from './HistoryPanel';
 import type { PresencePeer } from '../types';
 
 function escapeAttr(s: string): string {
@@ -185,6 +187,11 @@ export function createToolbar(): HTMLElement {
       </button>
     </div>
 
+    <div class="toolbar-group desktop-only">
+      <button class="toolbar-btn" data-action="toggle-comments" title="Comments" aria-label="Comments">${icon('chat')}</button>
+      <button class="toolbar-btn" data-action="toggle-history" title="Version history" aria-label="Version history">${icon('history')}</button>
+    </div>
+
     <div class="toolbar-group">
       <button class="toolbar-btn sync-cloud-btn" data-action="cloud-sync" id="cloud-sync-btn" title="Sync to cloud (Ctrl+S)" style="display:none">
         ${icon('cloud-sync')}
@@ -362,6 +369,12 @@ function setupToolbarEvents(toolbar: HTMLElement): void {
         break;
       case 'play-audio':
         emit('play-audio-request');
+        break;
+      case 'toggle-comments':
+        toggleCommentsPanel();
+        break;
+      case 'toggle-history':
+        toggleHistoryPanel();
         break;
       case 'cloud-sync':
         emit('cloud-sync-request');
