@@ -725,7 +725,8 @@
   height: 100%;
   overflow-y: auto;
   padding: 24px 32px;
-  scroll-behavior: smooth;
+  /* Instant scroll: smooth here fights bidirectional sync-scroll and feels stuck. */
+  scroll-behavior: auto;
 }
 
 /* ─── Status bar ─── */

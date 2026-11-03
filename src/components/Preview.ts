@@ -5,6 +5,7 @@ import { on, emit } from '../lib/events';
 import { htmlToMarkdown } from '../lib/html-to-markdown';
 import { isValidDiagramType, type DiagramType } from '../lib/draw-command';
 import { openDiagramEditPanel, openDiagramInsertPanel, applyDiagramEdit } from './DiagramEditPanel';
+import { createScrollSyncGate } from '../lib/scroll-sync-gate';
 
 let previewEl: HTMLElement;
 let contentEl: HTMLElement;
@@ -636,24 +637,23 @@ export function createPreview(): HTMLElement {
     }
   });
 
-  // Bidirectional scroll sync
-  let ignorePreviewScroll = false;
+  // Bidirectional scroll sync (gated so echo events do not yank the driving pane)
+  const previewScrollGate = createScrollSyncGate();
   contentEl.addEventListener('scroll', () => {
     const tab = getActiveTab();
     if (tab) setPreviewScroll(tab.id, contentEl.scrollTop);
-    if (!getState().syncScroll || ignorePreviewScroll) return;
-    const scrollHeight = contentEl.scrollHeight - contentEl.clientHeight;
-    if (scrollHeight > 0) {
-      emit('preview-scroll', contentEl.scrollTop / scrollHeight);
-    }
-  });
+    if (!getState().syncScroll || previewScrollGate.isLocked()) return;
+    const max = contentEl.scrollHeight - contentEl.clientHeight;
+    if (max > 0) emit('preview-scroll', contentEl.scrollTop / max);
+  }, { passive: true });
 
   on('editor-scroll', (ratio: unknown) => {
     if (!getState().syncScroll) return;
-    ignorePreviewScroll = true;
-    const r = ratio as number;
-    contentEl.scrollTop = r * (contentEl.scrollHeight - contentEl.clientHeight);
-    requestAnimationFrame(() => { ignorePreviewScroll = false; });
+    previewScrollGate.run(() => {
+      const max = contentEl.scrollHeight - contentEl.clientHeight;
+      if (max <= 0) return;
+      contentEl.scrollTop = (ratio as number) * max;
+    });
   });
 
   // Render on content change (skip if WYSIWYG was the source)
