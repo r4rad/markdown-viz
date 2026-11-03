@@ -91,7 +91,7 @@ All themes ship with configurable syntax-color CSS variables (`--mk-heading`, `-
 ### Cloud Sync & Auth
 - **Optional** — the entire app works offline without any account
 - **Providers** — GitHub OAuth, Google OAuth (via Firebase Auth)
-- **Storage** — Firestore; up to `VITE_MAX_SYNC_TABS` docs per account (default: 5)
+- **Storage** — Firestore; up to `VITE_MAX_SYNC_TABS` docs per account (default: 50)
 - **Ctrl+S** — saves locally AND syncs to cloud when signed in
 - **Cloud sync button** — toolbar button (☁️) visible when signed in
 - **Auto-sync** — runs every `VITE_AUTO_SYNC_INTERVAL_SECONDS` seconds (default: 60) for signed-in users
@@ -216,7 +216,7 @@ All variables are optional. Copy `.env.example` to `.env.local` and override wha
 | `VITE_FIREBASE_MESSAGING_SENDER_ID` | — | Firebase messaging sender ID |
 | `VITE_FIREBASE_APP_ID` | — | Firebase app ID |
 | `VITE_GROQ_API_KEY` | — | Groq API key for AI audio (free tier at console.groq.com) |
-| `VITE_MAX_SYNC_TABS` | `5` | Max documents synced per user account |
+| `VITE_MAX_SYNC_TABS` | `50` | Max personal files stored in cloud sync per account |
 | `VITE_AUTO_SYNC_INTERVAL_SECONDS` | `60` | Auto-sync interval for signed-in users (seconds) |
 | `VITE_EMAILJS_SERVICE_ID` | — | EmailJS service ID (feedback email) |
 | `VITE_EMAILJS_TEMPLATE_ID` | — | EmailJS template ID (feedback email) |

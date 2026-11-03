@@ -31,7 +31,7 @@ export function selectTabsForCloudSync(
   tabs: SyncableTab[],
   maxSyncTabs: number,
 ): SyncableTab[] {
-  const limit = Number.isFinite(maxSyncTabs) && maxSyncTabs > 0 ? maxSyncTabs : 10;
+  const limit = Number.isFinite(maxSyncTabs) && maxSyncTabs > 0 ? maxSyncTabs : 50;
   return [...tabs]
     .sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0))
     .slice(0, limit);
