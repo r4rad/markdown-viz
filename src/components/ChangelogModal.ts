@@ -27,6 +27,8 @@ const KIND_CLASS: Record<string, string> = {
 };
 
 let overlayEl: HTMLElement | null = null;
+let keyHandler: ((e: KeyboardEvent) => void) | null = null;
+let openTimer: ReturnType<typeof setTimeout> | null = null;
 
 /**
  * Opens the changelog modal unconditionally.
@@ -49,7 +51,6 @@ export function openChangelogModal(): void {
   const modal = document.createElement('div');
   modal.className = 'modal cl-modal';
 
-  // ── Header ────────────────────────────────────────────────────────────────
   const header = document.createElement('div');
   header.className = 'modal-header';
 
@@ -58,14 +59,15 @@ export function openChangelogModal(): void {
   titleEl.textContent = "🎉 What's New";
 
   const closeBtn = document.createElement('button');
+  closeBtn.type = 'button';
   closeBtn.className = 'modal-close';
+  closeBtn.setAttribute('aria-label', 'Close');
   closeBtn.innerHTML = '×';
   closeBtn.title = 'Close (Esc)';
   closeBtn.addEventListener('click', closeChangelogModal);
 
   header.append(titleEl, closeBtn);
 
-  // ── Body ──────────────────────────────────────────────────────────────────
   const body = document.createElement('div');
   body.className = 'modal-body cl-body';
 
@@ -110,7 +112,6 @@ export function openChangelogModal(): void {
     body.appendChild(section);
   }
 
-  // ── Footer ────────────────────────────────────────────────────────────────
   const footer = document.createElement('div');
   footer.className = 'cl-footer';
 
@@ -119,6 +120,7 @@ export function openChangelogModal(): void {
   footerText.textContent = 'More improvements on the way. Thanks for using MarkdownViz! 💙';
 
   const dismissBtn = document.createElement('button');
+  dismissBtn.type = 'button';
   dismissBtn.className = 'dep-btn dep-btn-apply cl-dismiss-btn';
   dismissBtn.textContent = 'Got it!';
   dismissBtn.addEventListener('click', closeChangelogModal);
@@ -129,17 +131,19 @@ export function openChangelogModal(): void {
   overlayEl.appendChild(modal);
   document.body.appendChild(overlayEl);
 
-  // Focus the close button for keyboard accessibility
   requestAnimationFrame(() => closeBtn.focus());
 
-  // Keyboard: Escape to close
-  const onKeydown = (e: KeyboardEvent) => {
-    if (e.key === 'Escape') { closeChangelogModal(); document.removeEventListener('keydown', onKeydown); }
+  keyHandler = (e: KeyboardEvent) => {
+    if (e.key === 'Escape') closeChangelogModal();
   };
-  document.addEventListener('keydown', onKeydown);
+  document.addEventListener('keydown', keyHandler);
 }
 
 export function closeChangelogModal(): void {
+  if (keyHandler) {
+    document.removeEventListener('keydown', keyHandler);
+    keyHandler = null;
+  }
   if (overlayEl) {
     overlayEl.remove();
     overlayEl = null;
@@ -152,10 +156,15 @@ export function closeChangelogModal(): void {
  * Called automatically on app load.
  */
 export function showChangelogIfNew(): void {
-  if (!hasSeenChangelog(CHANGELOG_VERSION)) {
-    // Small delay so the app fully renders first
-    setTimeout(() => openChangelogModal(), 600);
-  }
+  if (hasSeenChangelog(CHANGELOG_VERSION)) return;
+  if (openTimer) clearTimeout(openTimer);
+  openTimer = setTimeout(() => {
+    openTimer = null;
+    // Re-check in case the user closed an early open or Settings marked it seen.
+    if (!hasSeenChangelog(CHANGELOG_VERSION) && !overlayEl) {
+      openChangelogModal();
+    }
+  }, 600);
 }
 
 function formatDate(iso: string): string {
