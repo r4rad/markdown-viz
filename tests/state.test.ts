@@ -151,6 +151,16 @@ describe('State Management', () => {
       expect(getState().activeTabId).toBe(tab1.id);
     });
 
+    it('should bump lastOpenedAt when activating a tab', () => {
+      const tab1 = addTab('Recent1.md', '1');
+      const tab2 = addTab('Recent2.md', '2');
+      const before = getState().tabs.find((t) => t.id === tab1.id)!.lastOpenedAt ?? 0;
+      switchTab(tab1.id);
+      const after = getState().tabs.find((t) => t.id === tab1.id)!.lastOpenedAt ?? 0;
+      expect(after).toBeGreaterThanOrEqual(before);
+      expect(getState().tabs.find((t) => t.id === tab2.id)).toBeTruthy();
+    });
+
     it('should not switch to non-existent tab', () => {
       const currentId = getState().activeTabId;
       switchTab('fake-id');

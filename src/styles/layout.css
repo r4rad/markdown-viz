@@ -547,11 +547,8 @@
   min-height: 34px;
   background: var(--bg-tabs);
   border-bottom: 1px solid var(--border-primary);
-  overflow-x: auto;
-  overflow-y: hidden;
-  -webkit-overflow-scrolling: touch;
-  scroll-behavior: smooth;
-  scrollbar-width: thin;
+  overflow: hidden;
+  position: relative;
 }
 
 .tab-bar::-webkit-scrollbar {
@@ -645,6 +642,86 @@
   color: var(--text-muted);
   font-size: 16px;
   cursor: pointer;
+  flex-shrink: 0;
+}
+
+.tab-overflow {
+  position: relative;
+  flex-shrink: 0;
+  display: flex;
+  align-items: stretch;
+}
+
+.tab-overflow-btn {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  height: 100%;
+  padding: 0 10px;
+  border: none;
+  border-right: 1px solid var(--border-secondary);
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.tab-overflow-btn:hover,
+.tab-overflow-btn.open {
+  background: var(--bg-tab-hover);
+  color: var(--text-primary);
+}
+
+.tab-overflow-label {
+  font-variant-numeric: tabular-nums;
+  min-width: 1ch;
+}
+
+.tab-overflow-caret {
+  font-size: 10px;
+  opacity: 0.8;
+}
+
+.tab-overflow-menu {
+  position: absolute;
+  top: calc(100% + 2px);
+  right: 0;
+  z-index: 40;
+  min-width: 200px;
+  max-width: min(320px, 80vw);
+  max-height: min(360px, 50vh);
+  overflow: auto;
+  padding: 4px;
+  background: var(--bg-dropdown, var(--bg-toolbar));
+  border: 1px solid var(--border-primary);
+  border-radius: 6px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.25);
+}
+
+.tab-overflow-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  text-align: left;
+  border: none;
+  background: transparent;
+  color: var(--text-primary);
+  font-size: 12px;
+  padding: 8px 10px;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.tab-overflow-item:hover {
+  background: var(--bg-hover, rgba(127, 127, 127, 0.15));
+}
+
+.tab-overflow-item-name {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .tab-add:hover {

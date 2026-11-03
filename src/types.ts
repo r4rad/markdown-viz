@@ -41,6 +41,8 @@ export interface FileTab {
   dirty: boolean;
   updatedAt: number;
   createdAt: number;
+  /** Last time this tab became active — drives tab-strip overflow priority. */
+  lastOpenedAt?: number;
   folderId: FolderId | null;
   origin: FileOrigin;
   /** GitHub mirror sync state (R6). Unset means not mirrored / Off in the UI. */

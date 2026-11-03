@@ -93,6 +93,7 @@ function createTab(
     dirty: false,
     updatedAt: Date.now(),
     createdAt: Date.now(),
+    lastOpenedAt: Date.now(),
     folderId: extras?.folderId ?? null,
     origin: extras?.origin ?? LOCAL_ORIGIN,
     // Unset until a GitHub mirror exists — avoids a false "InSync" badge.
@@ -192,8 +193,10 @@ export function closeTab(id: string): void {
 }
 
 export function switchTab(id: string): void {
-  if (!state.tabs.find(t => t.id === id)) return;
+  const tab = state.tabs.find(t => t.id === id);
+  if (!tab) return;
   state.activeTabId = id;
+  tab.lastOpenedAt = Date.now();
   emit('active-tab-changed', getActiveTab());
   emit('state-changed', state);
 }

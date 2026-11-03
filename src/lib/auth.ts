@@ -124,9 +124,10 @@ export function isFirebaseReady(): boolean {
 
 // ─── Cloud Sync ───
 
+/** Soft cloud store cap for personal files (tabs beyond this stay local-only). */
 export function getMaxSyncTabs(): number {
   const fromEnv = Number(import.meta.env.VITE_MAX_SYNC_TABS);
-  return (Number.isFinite(fromEnv) && fromEnv > 0) ? fromEnv : 10;
+  return (Number.isFinite(fromEnv) && fromEnv > 0) ? fromEnv : 50;
 }
 
 export async function syncToCloud(state: AppState): Promise<boolean> {
@@ -163,6 +164,7 @@ export async function syncToCloud(state: AppState): Promise<boolean> {
         scrollPreview: tab.scrollPreview,
         updatedAt: tab.updatedAt,
         createdAt: tab.createdAt,
+        lastOpenedAt: tab.lastOpenedAt ?? tab.updatedAt,
         folderId: tab.folderId ?? null,
         origin: tab.origin ?? LOCAL_ORIGIN,
       }, { merge: true });
@@ -232,6 +234,7 @@ export async function loadFromCloud(): Promise<Partial<AppState> | null> {
         dirty: false,
         updatedAt: d.updatedAt || Date.now(),
         createdAt: d.createdAt || Date.now(),
+        lastOpenedAt: d.lastOpenedAt || d.updatedAt || Date.now(),
         folderId: d.folderId ?? null,
         origin: (d.origin as FileOrigin) ?? LOCAL_ORIGIN,
       }));
